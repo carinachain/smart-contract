@@ -21,27 +21,31 @@ contract UserManager {
         address[] FeeSelfPay;
     }
 
-    mapping(address => AddressList) private tenantStoresList;
+    mapping(address => AddressList) private merchentStoresList;
 
-    mapping(address => mapping(address => RelationType)) private storeTenantRelationInfo;
+    mapping(address => mapping(address => RelationType)) private storeMerchantRelationInfo;
 
-    mapping(address => address) private storeToTenant;
+    mapping(address => address) private storeToMerchant;
 
     mapping(address => address[]) private clerksList;
 
-    mapping(address => address) private clerkToMerchant;
+    // 7/13 change to store
+    mapping(address => address) private clerkToStore;
 
-    mapping(address => AddressList) private contractMerchantsList;
+    // 7/13 change to BusinessEntity
+    mapping(address => AddressList) private contractBusinessEntityList;
 
-    mapping(address => mapping(address => RelationType)) private contractMerchantRelationInfo;
+    // 7/13 change to BusinessEntity
+    mapping(address => mapping(address => RelationType)) private contractBusinessEntityRelationInfo;
 
-    mapping(address => AddressList) private merchantContractsList;
+    // 7/13 chenge to operatable
+    mapping(address => AddressList) private operatableContractsList;
 
 
     event UserSet(address indexed userAddress, UserType indexed userType);
-    event TenantStoreRelationChanged(address indexed userAddress, address indexed targetAddress, RelationType indexed newRelationType, RelationType previousRelationType);
-    event ContractMerchantChanged(address indexed contractAddress, address indexed operatorAddress, RelationType indexed newType, RelationType previousType);
-    event ClerksListChanged(address indexed merchantAddress, address indexed clerkAddress, bool indexed isAdd);
+    event MerchantStoreRelationChanged(address indexed userAddress, address indexed targetAddress, RelationType indexed newRelationType, RelationType previousRelationType);
+    event ContractBusinessEntityChanged(address indexed contractAddress, address indexed operatorAddress, RelationType indexed newType, RelationType previousType);
+    event ClerksListChanged(address indexed storeAddress, address indexed clerkAddress, bool indexed isAdd);
 
     modifier onlyUserAdmin() {
         require(adminControler.checkAdmin(msg.sender, thisContractType), "Need admin");
@@ -149,53 +153,53 @@ contract UserManager {
         }
     }
 
-    function getStoreTenantRelation(
+    function getStoreMerchantRelation(
         address storeAddress,
-        address tenantAddress
+        address merchantAddress
     ) external view returns(RelationType) {
-        return storeTenantRelationInfo[storeAddress][tenantAddress];
+        return storeMerchantRelationInfo[storeAddress][merchantAddress];
     }
 
-    function getTenantStoresList(
-        address tenantAddress,
+    function getMerchantStoresList(
+        address merchantAddress,
         RelationType relationType
     ) external view returns(address[] memory) {
         if(relationType == RelationType.FEEFREE) {
-            return tenantStoresList[tenantAddress].FeeFree;
+            return merchentStoresList[merchantAddress].FeeFree;
         } else if(relationType == RelationType.FEESELFPAY) {
-            return tenantStoresList[tenantAddress].FeeSelfPay;
+            return merchentStoresList[merchantAddress].FeeSelfPay;
         } else {
             revert("Invalid type");
         }
     }
 
-    function getTenantFromStore(address storeAddress) external view returns (address) {
-        return storeToTenant[storeAddress];
+    function getMerchantFromStore(address storeAddress) external view returns (address) {
+        return storeToMerchant[storeAddress];
     }
 
-    function _addToTenantStoresList(
-        address tenantAddress, 
+    function _addToMerchantStoresList(
+        address merchantAddress, 
         address storeAddress, 
         RelationType relationType
     ) internal {
         if(relationType == RelationType.FEEFREE) {
-            tenantStoresList[tenantAddress].FeeFree.push(storeAddress);
+            merchentStoresList[merchantAddress].FeeFree.push(storeAddress);
         } else if(relationType == RelationType.FEESELFPAY) {
-            tenantStoresList[tenantAddress].FeeSelfPay.push(storeAddress);
+            merchentStoresList[merchantAddress].FeeSelfPay.push(storeAddress);
         } else {
             revert("Invalid type");
         }
     } 
 
-    function _removeFromTenantStoresList(
-        address tenantAddress, 
+    function _removeFromMerchantStoresList(
+        address merchantAddress, 
         address storeAddress
     ) internal {
         address[] storage addresses;
-        if(storeTenantRelationInfo[storeAddress][tenantAddress] == RelationType.FEEFREE) {
-            addresses = tenantStoresList[tenantAddress].FeeFree;
-        } else if(storeTenantRelationInfo[storeAddress][tenantAddress] == RelationType.FEESELFPAY) {
-            addresses = tenantStoresList[tenantAddress].FeeSelfPay;
+        if(storeMerchantRelationInfo[storeAddress][merchantAddress] == RelationType.FEEFREE) {
+            addresses = merchentStoresList[merchantAddress].FeeFree;
+        } else if(storeMerchantRelationInfo[storeAddress][merchantAddress] == RelationType.FEESELFPAY) {
+            addresses = merchentStoresList[merchantAddress].FeeSelfPay;
         } else {
             revert("Not in the list");
         }
@@ -209,42 +213,42 @@ contract UserManager {
         }
     }
 
-    // set relation between Tenant and Store,  FEEFREE or FEESELFPAY
-    function manageTenantStoreRelation(
-        address tenantAddress, 
+    // set relation between Merchant and Store,  FEEFREE or FEESELFPAY
+    function manageMerchantStoreRelation(
+        address merchantAddress, 
         address storeAddress,
         RelationType relationType
     ) external onlyUserAdmin {
-        require(userTypeInfo[tenantAddress] == UserType.TENANT, "TenantAddress is not Tenant");
+        require(userTypeInfo[merchantAddress] == UserType.MERCHANT, "MerchantAddress is not merchant");
         require(userTypeInfo[storeAddress] == UserType.STORE, "StoreAddress is not Store");
         require(relationType != RelationType.UNDEFINED, "Invalid type");
 
-        RelationType previousRelationType = storeTenantRelationInfo[storeAddress][tenantAddress];
+        RelationType previousRelationType = storeMerchantRelationInfo[storeAddress][merchantAddress];
         require(previousRelationType != relationType, "Already set");
         require(uint8(previousRelationType) > 1 || uint8(relationType) > 1, "Invalid type");
 
-        address previousTenantAddress = storeToTenant[storeAddress];
-        require(previousTenantAddress == tenantAddress || previousTenantAddress == address(0), "Store set by other tenant");
+        address previousMerchantAddress = storeToMerchant[storeAddress];
+        require(previousMerchantAddress == merchantAddress || previousMerchantAddress == address(0), "Store set by other merchant");
 
         if(uint8(previousRelationType) > 1) {
-            _removeFromTenantStoresList(tenantAddress, storeAddress);
+            _removeFromMerchantStoresList(merchantAddress, storeAddress);
         }
 
         if(relationType == RelationType.CLEARED){
-            storeToTenant[storeAddress] = address(0);
+            storeToMerchant[storeAddress] = address(0);
         } else {
-            storeToTenant[storeAddress] = tenantAddress;
-            _addToTenantStoresList(tenantAddress, storeAddress, relationType);
+            storeToMerchant[storeAddress] = merchantAddress;
+            _addToMerchantStoresList(merchantAddress, storeAddress, relationType);
         }
         
-        storeTenantRelationInfo[storeAddress][tenantAddress] = relationType;
+        storeMerchantRelationInfo[storeAddress][merchantAddress] = relationType;
 
-        emit TenantStoreRelationChanged(tenantAddress, storeAddress, relationType, previousRelationType);
+        emit MerchantStoreRelationChanged(merchantAddress, storeAddress, relationType, previousRelationType);
 
     }
 
-    function getMerchantFromClerk(address clerkAddress) external view returns(address){
-        return clerkToMerchant[clerkAddress];
+    function getStoreFromClerk(address clerkAddress) external view returns(address){
+        return clerkToStore[clerkAddress];
     }
 
     function getClerksList(address storeAddress) external view returns(address[] memory){
@@ -253,68 +257,68 @@ contract UserManager {
 
     // clerks only can add to store's list
     function addClerk(
-        address merchantAddress,
+        address storeAddress,
         address clerkAddress
     ) external onlyUserAdmin {
-        require(userTypeInfo[merchantAddress] == UserType.STORE || userTypeInfo[merchantAddress] == UserType.TENANT, "Merchant must be Tenant/Store");
+        require(userTypeInfo[storeAddress] == UserType.STORE, "StoreAddress is not Store");
         require(userTypeInfo[clerkAddress] == UserType.CLERK, "ClerkAddress is not Clerk");
-        require(clerkToMerchant[clerkAddress] != merchantAddress, "Already added");
-        require(clerkToMerchant[clerkAddress] == address(0), "Clerk's Merchant already set");
-        clerkToMerchant[clerkAddress] = merchantAddress;
-        clerksList[merchantAddress].push(clerkAddress);
+        require(clerkToStore[clerkAddress] != storeAddress, "Already added");
+        require(clerkToStore[clerkAddress] == address(0), "Clerk's store already set");
+        clerkToStore[clerkAddress] = storeAddress;
+        clerksList[storeAddress].push(clerkAddress);
 
-        emit ClerksListChanged(merchantAddress, clerkAddress, true);
+        emit ClerksListChanged(storeAddress, clerkAddress, true);
     }
 
     function removeClerk(
-        address merchantAddress,
+        address storeAddress,
         address removeClerkAddress
     ) external onlyUserAdmin {
-        require(clerkToMerchant[removeClerkAddress] == merchantAddress, "Not merchant's clerk");
+        require(clerkToStore[removeClerkAddress] == storeAddress, "Not store's clerk");
         
-        for (uint256 i = 0; i < clerksList[merchantAddress].length; i++) {
-            if (clerksList[merchantAddress][i] == removeClerkAddress) {
-                clerksList[merchantAddress][i] = clerksList[merchantAddress][clerksList[merchantAddress].length - 1];
-                clerksList[merchantAddress].pop();
+        for (uint256 i = 0; i < clerksList[storeAddress].length; i++) {
+            if (clerksList[storeAddress][i] == removeClerkAddress) {
+                clerksList[storeAddress][i] = clerksList[storeAddress][clerksList[storeAddress].length - 1];
+                clerksList[storeAddress].pop();
                 break;
             }
         }
-        clerkToMerchant[removeClerkAddress] = address(0);
+        clerkToStore[removeClerkAddress] = address(0);
 
-        emit ClerksListChanged(merchantAddress, removeClerkAddress, false);
+        emit ClerksListChanged(storeAddress, removeClerkAddress, false);
     }
 
-    // ContractMerchant means Tenants/Stores who can use this contract in router
-    function getContractMerchantRelation(
+    // Contract businessEntity means Merchants/Stores who can use this contract in router
+    function getContractBERelation(
         address contractAddress,
-        address merchantAddress
+        address businessEntityAddress
     ) external view returns (RelationType) {
-        return contractMerchantRelationInfo[contractAddress][merchantAddress];
+        return contractBusinessEntityRelationInfo[contractAddress][businessEntityAddress];
     }
 
-    function getMerchantContractsList(
-        address merchantAddress, 
+    function getOperatableContractsList(
+        address businessEntityAddress, 
         RelationType typeValue
     ) external view returns (address[] memory) {
         if(typeValue == RelationType.FEEFREE) {
-            return merchantContractsList[merchantAddress].FeeFree;
+            return operatableContractsList[businessEntityAddress].FeeFree;
         } else if(typeValue == RelationType.FEESELFPAY) {
-            return merchantContractsList[merchantAddress].FeeSelfPay;
+            return operatableContractsList[businessEntityAddress].FeeSelfPay;
         } else {
             revert("Invalid type");
         }
     }
 
-    function _removeFromMerchantContractsList(
-        address merchantAddress,
+    function _removeFromOperatableContractsList(
+        address businessEntityAddress,
         address removeContractAddress
     ) internal {
-        RelationType typeValue = contractMerchantRelationInfo[removeContractAddress][merchantAddress];
+        RelationType typeValue = contractBusinessEntityRelationInfo[removeContractAddress][businessEntityAddress];
         address[] storage addresses;
         if(typeValue == RelationType.FEEFREE) {
-            addresses = merchantContractsList[merchantAddress].FeeFree;
+            addresses = operatableContractsList[businessEntityAddress].FeeFree;
         } else if(typeValue == RelationType.FEESELFPAY) {
-            addresses = merchantContractsList[merchantAddress].FeeSelfPay;
+            addresses = operatableContractsList[businessEntityAddress].FeeSelfPay;
         } else {
             revert("Not in the list");
         }
@@ -328,34 +332,34 @@ contract UserManager {
         }
     }
 
-    function getContractMerchantsList(
+    function getContractBEList(
         address contractAddress,
         RelationType typeValue
     ) external view returns(address[] memory){
         if(typeValue == RelationType.FEEFREE) {
-            return contractMerchantsList[contractAddress].FeeFree;
+            return contractBusinessEntityList[contractAddress].FeeFree;
         } else if(typeValue == RelationType.FEESELFPAY) {
-            return contractMerchantsList[contractAddress].FeeSelfPay;
+            return contractBusinessEntityList[contractAddress].FeeSelfPay;
         } else {
             revert("Invalid type");
         }
     }
 
-    function _removeFromContractMerchantsList(
+    function _removeFromContractBEList(
         address contractAddress,
-        address removeMerchantAddress
+        address removeAddress
     ) internal {
         address[] storage addresses;
-        if(contractMerchantRelationInfo[contractAddress][removeMerchantAddress] == RelationType.FEEFREE) {
-            addresses = contractMerchantsList[contractAddress].FeeFree;
-        } else if(contractMerchantRelationInfo[contractAddress][removeMerchantAddress] == RelationType.FEESELFPAY) {
-            addresses = contractMerchantsList[contractAddress].FeeSelfPay;
+        if(contractBusinessEntityRelationInfo[contractAddress][removeAddress] == RelationType.FEEFREE) {
+            addresses = contractBusinessEntityList[contractAddress].FeeFree;
+        } else if(contractBusinessEntityRelationInfo[contractAddress][removeAddress] == RelationType.FEESELFPAY) {
+            addresses = contractBusinessEntityList[contractAddress].FeeSelfPay;
         } else {
             revert("Not in the list");
         }
 
         for (uint256 i = 0; i < addresses.length; i++) {
-            if (addresses[i] == removeMerchantAddress) {
+            if (addresses[i] == removeAddress) {
                 addresses[i] = addresses[addresses.length - 1];
                 addresses.pop();
                 break;
@@ -364,39 +368,39 @@ contract UserManager {
     }
 
     // add/remove/change
-    function manageContractMerchant(
+    function manageContractBE(
         address senderAddress,
         address contractAddress,
-        address merchantAddress,
+        address businessEntityAddress,
         RelationType targetType
     ) external onlyUserAdmin onlyOriginalContract(contractAddress) {
-        require(userTypeInfo[merchantAddress] == UserType.STORE || userTypeInfo[merchantAddress] == UserType.TENANT, "Merchant must be Tenant/Store");
+        require(userTypeInfo[businessEntityAddress] == UserType.STORE || userTypeInfo[businessEntityAddress] == UserType.MERCHANT, "BE must be Merchant/Store");
 
         require(senderAddress == IGenericContract(contractAddress).creator(), "Only for contract creator");
 
-        RelationType merchantCreatorRelation = storeTenantRelationInfo[merchantAddress][IGenericContract(contractAddress).creator()];
-        require(targetType != merchantCreatorRelation, "Already had authorization");
+        RelationType businessEntityCreatorRelation = storeMerchantRelationInfo[businessEntityAddress][IGenericContract(contractAddress).creator()];
+        require(targetType != businessEntityCreatorRelation, "Already had authorization");
 
         require(targetType != RelationType.UNDEFINED, "Invalid type");
-        RelationType previousRelationType = contractMerchantRelationInfo[contractAddress][merchantAddress];
+        RelationType previousRelationType = contractBusinessEntityRelationInfo[contractAddress][businessEntityAddress];
         require(previousRelationType != targetType, "Already set");
         require(uint8(previousRelationType) > 1 || uint8(targetType) > 1, "Invalid type");
 
         if(uint8(previousRelationType) > 1) {
-            _removeFromMerchantContractsList(merchantAddress, contractAddress);
-            _removeFromContractMerchantsList(contractAddress, merchantAddress);
+            _removeFromOperatableContractsList(businessEntityAddress, contractAddress);
+            _removeFromContractBEList(contractAddress, businessEntityAddress);
         } 
 
         if(targetType == RelationType.FEEFREE) {
-            merchantContractsList[merchantAddress].FeeFree.push(contractAddress);
-            contractMerchantsList[contractAddress].FeeFree.push(merchantAddress);
+            operatableContractsList[businessEntityAddress].FeeFree.push(contractAddress);
+            contractBusinessEntityList[contractAddress].FeeFree.push(businessEntityAddress);
         } else if(targetType == RelationType.FEESELFPAY) {
-            merchantContractsList[merchantAddress].FeeSelfPay.push(contractAddress);
-            contractMerchantsList[contractAddress].FeeSelfPay.push(merchantAddress);
+            operatableContractsList[businessEntityAddress].FeeSelfPay.push(contractAddress);
+            contractBusinessEntityList[contractAddress].FeeSelfPay.push(businessEntityAddress);
         }
 
-        contractMerchantRelationInfo[contractAddress][merchantAddress] = targetType;
+        contractBusinessEntityRelationInfo[contractAddress][businessEntityAddress] = targetType;
         
-        emit ContractMerchantChanged(contractAddress, merchantAddress, targetType, previousRelationType);
+        emit ContractBusinessEntityChanged(contractAddress, businessEntityAddress, targetType, previousRelationType);
     }
 }

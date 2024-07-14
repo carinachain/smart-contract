@@ -27,19 +27,19 @@ contract Router {
     modifier onlyAuthroizedUser(address contractAddress, address senderAddress) {
         bool result;
         address contractCreator = IGenericContract(contractAddress).creator();
-        address senderMerchantAddress = userManager.getMerchantFromClerk(senderAddress);
-        address senderStoreTenantAddress = userManager.getTenantFromStore(senderMerchantAddress);
-        address senderTenantAddress = userManager.getTenantFromStore(senderAddress);
+        address senderStoreAddress = userManager.getStoreFromClerk(senderAddress);
+        address senderStoreMerchantAddress = userManager.getMerchantFromStore(senderStoreAddress);
+        address senderMerchantAddress = userManager.getMerchantFromStore(senderAddress);
 
         result = (
-            contractCreator == senderMerchantAddress || 
-            contractCreator == senderStoreTenantAddress ||
-            contractCreator == senderTenantAddress ||
+            contractCreator == senderStoreAddress || 
+            contractCreator == senderStoreMerchantAddress ||
+            contractCreator == senderMerchantAddress ||
             contractCreator == senderAddress || 
-            uint8(userManager.getContractMerchantRelation(contractAddress, senderMerchantAddress)) > 1 ||
-            uint8(userManager.getContractMerchantRelation(contractAddress, senderStoreTenantAddress)) > 1 ||
-            uint8(userManager.getContractMerchantRelation(contractAddress, senderAddress)) > 1 ||
-            uint8(userManager.getContractMerchantRelation(contractAddress, senderTenantAddress)) > 1
+            uint8(userManager.getContractBERelation(contractAddress, senderStoreAddress)) > 1 ||
+            uint8(userManager.getContractBERelation(contractAddress, senderStoreMerchantAddress)) > 1 ||
+            uint8(userManager.getContractBERelation(contractAddress, senderAddress)) > 1 ||
+            uint8(userManager.getContractBERelation(contractAddress, senderMerchantAddress)) > 1
         );
         require(result, "No authorization");
         _;
@@ -64,33 +64,33 @@ contract Router {
         pointFactory.transferPoint(adminControler.getContractAddress(ContractType.CREDITPOINT), payerAddress, address(this), feeAmount);
     }
 
-    // contract owner or sender pay fee
+    // contract owner, Merchant or sender pay fee
     function _payUsingFee(address contractAddress, address senderAddress, uint256 feeAmount) internal {
         address payerAddress = senderAddress;
         address contractCreator = IGenericContract(contractAddress).creator();
-        address senderMerchantAddress = userManager.getMerchantFromClerk(senderAddress);
-        address senderStoreTenantAddress = userManager.getTenantFromStore(senderMerchantAddress);
-        address senderTenantAddress = userManager.getTenantFromStore(senderAddress);
+        address senderStoreAddress = userManager.getStoreFromClerk(senderAddress);
+        address senderStoreMerchantAddress = userManager.getMerchantFromStore(senderStoreAddress);
+        address senderMerchantAddress = userManager.getMerchantFromStore(senderAddress);
 
         if(
-            userManager.getStoreTenantRelation(senderMerchantAddress, contractCreator) == RelationType.FEEFREE ||
-            userManager.getContractMerchantRelation(contractAddress, senderMerchantAddress) == RelationType.FEEFREE ||
-            userManager.getContractMerchantRelation(contractAddress, senderStoreTenantAddress) == RelationType.FEEFREE ||
-            userManager.getStoreTenantRelation(senderAddress, contractCreator) == RelationType.FEEFREE ||
-            userManager.getContractMerchantRelation(contractAddress, senderTenantAddress) == RelationType.FEEFREE ||
-            userManager.getContractMerchantRelation(contractAddress, senderAddress) == RelationType.FEEFREE
+            userManager.getStoreMerchantRelation(senderStoreAddress, contractCreator) == RelationType.FEEFREE ||
+            userManager.getContractBERelation(contractAddress, senderStoreAddress) == RelationType.FEEFREE ||
+            userManager.getContractBERelation(contractAddress, senderStoreMerchantAddress) == RelationType.FEEFREE ||
+            userManager.getStoreMerchantRelation(senderAddress, contractCreator) == RelationType.FEEFREE ||
+            userManager.getContractBERelation(contractAddress, senderMerchantAddress) == RelationType.FEEFREE ||
+            userManager.getContractBERelation(contractAddress, senderAddress) == RelationType.FEEFREE
         ){
             payerAddress = contractCreator;
         } else if(
-            userManager.getContractMerchantRelation(contractAddress, senderStoreTenantAddress) == RelationType.FEESELFPAY &&
-            userManager.getStoreTenantRelation(senderMerchantAddress, senderStoreTenantAddress) == RelationType.FEEFREE
+            userManager.getContractBERelation(contractAddress, senderStoreMerchantAddress) == RelationType.FEESELFPAY &&
+            userManager.getStoreMerchantRelation(senderStoreAddress, senderStoreMerchantAddress) == RelationType.FEEFREE
         ){
-            payerAddress = senderStoreTenantAddress;
+            payerAddress = senderStoreMerchantAddress;
         } else if(
-            userManager.getContractMerchantRelation(contractAddress, senderTenantAddress) == RelationType.FEESELFPAY &&
-            userManager.getStoreTenantRelation(senderAddress, senderTenantAddress) == RelationType.FEEFREE
+            userManager.getContractBERelation(contractAddress, senderMerchantAddress) == RelationType.FEESELFPAY &&
+            userManager.getStoreMerchantRelation(senderAddress, senderMerchantAddress) == RelationType.FEEFREE
         ){
-            payerAddress = senderTenantAddress;
+            payerAddress = senderMerchantAddress;
         }
 
         _payFee(payerAddress, feeAmount);
@@ -98,9 +98,9 @@ contract Router {
 
     function _paySettingFee(address senderAddress, uint256 feeAmount) internal {
         address payerAddress = senderAddress;
-        address senderTenantAddress = userManager.getTenantFromStore(senderAddress);
-        if(userManager.getStoreTenantRelation(senderAddress, senderTenantAddress) == RelationType.FEEFREE){
-            payerAddress = senderTenantAddress;
+        address senderMerchantAddress = userManager.getMerchantFromStore(senderAddress);
+        if(userManager.getStoreMerchantRelation(senderAddress, senderMerchantAddress) == RelationType.FEEFREE){
+            payerAddress = senderMerchantAddress;
         }
         _payFee(payerAddress, feeAmount);
     }
@@ -119,7 +119,7 @@ contract Router {
         address newCreationAddress;
 
         if(targetType == ContractType.POINT){
-            require(userManager.getUserType(creatorAddress) == UserType.TENANT, "Point creator must be Tenant");
+            require(userManager.getUserType(creatorAddress) == UserType.MERCHANT, "Point creator must be MERCHANT");
             newCreationAddress = pointFactory.createPoint(creatorAddress, targetType, name, symbol, decimals, tokenValue.valueAmount, tokenValue.valueCurrency);
         } else {
             revert("Unavailable type");
@@ -129,7 +129,7 @@ contract Router {
         emit ContractCreated(targetType, newCreationAddress, creatorAddress);
     }
 
-    // distribute, who can call
+    // distribute
     function distribution(
         address contractAddress, 
         address senderAddress, 
@@ -146,7 +146,7 @@ contract Router {
         }
     }
 
-    // sender take creation from user, who can call, who should pay fee
+    // sender take creation from user
     function deduction(
         address contractAddress, 
         address senderAddress, 
@@ -210,7 +210,7 @@ contract Router {
         _payFee(senderAddress, feeAmount);
 
         if(IGenericContract(contractAddress).owner() == adminControler.getContractAddress(ContractType.POINTFACTORY)){
-            require(userManager.getUserType(newCreator) == UserType.TENANT, "Point creator must be Tenant");
+            require(userManager.getUserType(newCreator) == UserType.MERCHANT, "Point creator must be MERCHANT");
             pointFactory.changePointCreator(senderAddress, contractAddress, newCreator);
         } else {
             revert("Contract type not support");
@@ -229,43 +229,43 @@ contract Router {
         userManager.manageUser(userAddress, userType);
     }
 
-    function manageTenantStore(
-        address tenantAddress, 
+    function manageMerchantStore(
+        address merchantAddress, 
         address storeAddress,
         RelationType relationType,
         uint256 feeAmount
     ) external onlyRouterAdmin {
-        _payFee(tenantAddress, feeAmount);
-        userManager.manageTenantStoreRelation(tenantAddress, storeAddress, relationType);
+        _payFee(merchantAddress, feeAmount);
+        userManager.manageMerchantStoreRelation(merchantAddress, storeAddress, relationType);
     }
 
-    function manageContractMerchant(
+    function manageContractBE(
         address senderAddress,
         address contractAddress,
-        address merchantAddress,
+        address businessEntityAddress,
         RelationType targetType,
         uint256 feeAmount
     ) external onlyRouterAdmin {
         _paySettingFee(senderAddress, feeAmount);
-        userManager.manageContractMerchant(senderAddress, contractAddress, merchantAddress, targetType);
+        userManager.manageContractBE(senderAddress, contractAddress, businessEntityAddress, targetType);
     }
 
     function addClerkToList(
-        address merchantAddress,
+        address storeAddress,
         address clerkAddress,
         uint256 feeAmount
     ) external onlyRouterAdmin {
-        _paySettingFee(merchantAddress, feeAmount);
-        userManager.addClerk(merchantAddress, clerkAddress);
+        _paySettingFee(storeAddress, feeAmount);
+        userManager.addClerk(storeAddress, clerkAddress);
     }
 
     function removeClerkFromList(
-        address merchantAddress,
+        address storeAddress,
         address removeClerkAddress,
         uint256 feeAmount
     ) external onlyRouterAdmin {
-        _paySettingFee(merchantAddress, feeAmount);
-        userManager.removeClerk(merchantAddress, removeClerkAddress);
+        _paySettingFee(storeAddress, feeAmount);
+        userManager.removeClerk(storeAddress, removeClerkAddress);
     }
 
 }
