@@ -1,4 +1,15 @@
-ver.0.1  
+ver.0.2 20240714 deploying  
+Polygon Amoy Test Network  
+AdminControler:   
+PointFactory:   
+UserManager:   
+Router:   
+TOKENCRN:   
+CRNConverter:   
+  
+  
+  
+ver.0.1 20240626 deployed  
 Polygon Amoy Test Network  
 AdminControler: 0x16b1A8ab67c800AE517c48869221049f3026188C  
 PointFactory: 0xB5D1E4bf7748EBcD47463eC233941797495D4D0B  
