@@ -4,7 +4,7 @@ AdminControler:
 PointFactory:   
 UserManager:   
 Router:   
-TOKENCRN:   
+TOKENCRN: 0x29c24a487e95ed0bF4b88BDea0eAFB11f8C1955a  
 CRNConverter:   
   
   
