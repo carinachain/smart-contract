@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 enum UserType {
     UNREGISTERED,
     DELETED,
-    MERCHANT,
+    GROUP,
     STORE,
     CLERK,
     GENERAL,

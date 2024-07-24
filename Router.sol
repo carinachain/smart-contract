@@ -28,18 +28,18 @@ contract Router {
         bool result;
         address contractCreator = IGenericContract(contractAddress).creator();
         address senderStoreAddress = userManager.getStoreFromClerk(senderAddress);
-        address senderStoreMerchantAddress = userManager.getMerchantFromStore(senderStoreAddress);
-        address senderMerchantAddress = userManager.getMerchantFromStore(senderAddress);
+        address senderStoreGroupAddress = userManager.getGroupFromStore(senderStoreAddress);
+        address senderGroupAddress = userManager.getGroupFromStore(senderAddress);
 
         result = (
             contractCreator == senderStoreAddress || 
-            contractCreator == senderStoreMerchantAddress ||
-            contractCreator == senderMerchantAddress ||
+            contractCreator == senderStoreGroupAddress ||
+            contractCreator == senderGroupAddress ||
             contractCreator == senderAddress || 
             uint8(userManager.getContractBERelation(contractAddress, senderStoreAddress)) > 1 ||
-            uint8(userManager.getContractBERelation(contractAddress, senderStoreMerchantAddress)) > 1 ||
+            uint8(userManager.getContractBERelation(contractAddress, senderStoreGroupAddress)) > 1 ||
             uint8(userManager.getContractBERelation(contractAddress, senderAddress)) > 1 ||
-            uint8(userManager.getContractBERelation(contractAddress, senderMerchantAddress)) > 1
+            uint8(userManager.getContractBERelation(contractAddress, senderGroupAddress)) > 1
         );
         require(result, "No authorization");
         _;
@@ -64,33 +64,33 @@ contract Router {
         pointFactory.transferPoint(adminControler.getContractAddress(ContractType.CREDITPOINT), payerAddress, address(this), feeAmount);
     }
 
-    // contract owner, Merchant or sender pay fee
+    // contract owner, Group or sender pay fee
     function _payUsingFee(address contractAddress, address senderAddress, uint256 feeAmount) internal {
         address payerAddress = senderAddress;
         address contractCreator = IGenericContract(contractAddress).creator();
         address senderStoreAddress = userManager.getStoreFromClerk(senderAddress);
-        address senderStoreMerchantAddress = userManager.getMerchantFromStore(senderStoreAddress);
-        address senderMerchantAddress = userManager.getMerchantFromStore(senderAddress);
+        address senderStoreGroupAddress = userManager.getGroupFromStore(senderStoreAddress);
+        address senderGroupAddress = userManager.getGroupFromStore(senderAddress);
 
         if(
-            userManager.getStoreMerchantRelation(senderStoreAddress, contractCreator) == RelationType.FEEFREE ||
+            userManager.getStoreGroupRelation(senderStoreAddress, contractCreator) == RelationType.FEEFREE ||
             userManager.getContractBERelation(contractAddress, senderStoreAddress) == RelationType.FEEFREE ||
-            userManager.getContractBERelation(contractAddress, senderStoreMerchantAddress) == RelationType.FEEFREE ||
-            userManager.getStoreMerchantRelation(senderAddress, contractCreator) == RelationType.FEEFREE ||
-            userManager.getContractBERelation(contractAddress, senderMerchantAddress) == RelationType.FEEFREE ||
+            userManager.getContractBERelation(contractAddress, senderStoreGroupAddress) == RelationType.FEEFREE ||
+            userManager.getStoreGroupRelation(senderAddress, contractCreator) == RelationType.FEEFREE ||
+            userManager.getContractBERelation(contractAddress, senderGroupAddress) == RelationType.FEEFREE ||
             userManager.getContractBERelation(contractAddress, senderAddress) == RelationType.FEEFREE
         ){
             payerAddress = contractCreator;
         } else if(
-            userManager.getContractBERelation(contractAddress, senderStoreMerchantAddress) == RelationType.FEESELFPAY &&
-            userManager.getStoreMerchantRelation(senderStoreAddress, senderStoreMerchantAddress) == RelationType.FEEFREE
+            userManager.getContractBERelation(contractAddress, senderStoreGroupAddress) == RelationType.FEESELFPAY &&
+            userManager.getStoreGroupRelation(senderStoreAddress, senderStoreGroupAddress) == RelationType.FEEFREE
         ){
-            payerAddress = senderStoreMerchantAddress;
+            payerAddress = senderStoreGroupAddress;
         } else if(
-            userManager.getContractBERelation(contractAddress, senderMerchantAddress) == RelationType.FEESELFPAY &&
-            userManager.getStoreMerchantRelation(senderAddress, senderMerchantAddress) == RelationType.FEEFREE
+            userManager.getContractBERelation(contractAddress, senderGroupAddress) == RelationType.FEESELFPAY &&
+            userManager.getStoreGroupRelation(senderAddress, senderGroupAddress) == RelationType.FEEFREE
         ){
-            payerAddress = senderMerchantAddress;
+            payerAddress = senderGroupAddress;
         }
 
         _payFee(payerAddress, feeAmount);
@@ -98,9 +98,9 @@ contract Router {
 
     function _paySettingFee(address senderAddress, uint256 feeAmount) internal {
         address payerAddress = senderAddress;
-        address senderMerchantAddress = userManager.getMerchantFromStore(senderAddress);
-        if(userManager.getStoreMerchantRelation(senderAddress, senderMerchantAddress) == RelationType.FEEFREE){
-            payerAddress = senderMerchantAddress;
+        address senderGroupAddress = userManager.getGroupFromStore(senderAddress);
+        if(userManager.getStoreGroupRelation(senderAddress, senderGroupAddress) == RelationType.FEEFREE){
+            payerAddress = senderGroupAddress;
         }
         _payFee(payerAddress, feeAmount);
     }
@@ -119,7 +119,7 @@ contract Router {
         address newCreationAddress;
 
         if(targetType == ContractType.POINT){
-            require(userManager.getUserType(creatorAddress) == UserType.MERCHANT, "Point creator must be MERCHANT");
+            require(userManager.getUserType(creatorAddress) == UserType.STORE || userManager.getUserType(creatorAddress) == UserType.GROUP, "Creator must be Group/Store");
             newCreationAddress = pointFactory.createPoint(creatorAddress, targetType, name, symbol, decimals, tokenValue.valueAmount, tokenValue.valueCurrency);
         } else {
             revert("Unavailable type");
@@ -210,7 +210,7 @@ contract Router {
         _payFee(senderAddress, feeAmount);
 
         if(IGenericContract(contractAddress).owner() == adminControler.getContractAddress(ContractType.POINTFACTORY)){
-            require(userManager.getUserType(newCreator) == UserType.MERCHANT, "Point creator must be MERCHANT");
+            require(userManager.getUserType(newCreator) == UserType.STORE  || userManager.getUserType(newCreator) == UserType.GROUP, "Creator must be Group/Store");
             pointFactory.changePointCreator(senderAddress, contractAddress, newCreator);
         } else {
             revert("Contract type not support");
@@ -229,14 +229,14 @@ contract Router {
         userManager.manageUser(userAddress, userType);
     }
 
-    function manageMerchantStore(
-        address merchantAddress, 
+    function manageGroupStore(
+        address groupAddress, 
         address storeAddress,
         RelationType relationType,
         uint256 feeAmount
     ) external onlyRouterAdmin {
-        _payFee(merchantAddress, feeAmount);
-        userManager.manageMerchantStoreRelation(merchantAddress, storeAddress, relationType);
+        _payFee(groupAddress, feeAmount);
+        userManager.manageGroupStoreRelation(groupAddress, storeAddress, relationType);
     }
 
     function manageContractBE(

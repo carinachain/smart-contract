@@ -23,9 +23,9 @@ contract UserManager {
 
     mapping(address => AddressList) private merchentStoresList;
 
-    mapping(address => mapping(address => RelationType)) private storeMerchantRelationInfo;
+    mapping(address => mapping(address => RelationType)) private storeGroupRelationInfo;
 
-    mapping(address => address) private storeToMerchant;
+    mapping(address => address) private storeToGroup;
 
     mapping(address => address[]) private clerksList;
 
@@ -43,7 +43,7 @@ contract UserManager {
 
 
     event UserSet(address indexed userAddress, UserType indexed userType);
-    event MerchantStoreRelationChanged(address indexed userAddress, address indexed targetAddress, RelationType indexed newRelationType, RelationType previousRelationType);
+    event GroupStoreRelationChanged(address indexed userAddress, address indexed targetAddress, RelationType indexed newRelationType, RelationType previousRelationType);
     event ContractBusinessEntityChanged(address indexed contractAddress, address indexed operatorAddress, RelationType indexed newType, RelationType previousType);
     event ClerksListChanged(address indexed storeAddress, address indexed clerkAddress, bool indexed isAdd);
 
@@ -153,53 +153,53 @@ contract UserManager {
         }
     }
 
-    function getStoreMerchantRelation(
+    function getStoreGroupRelation(
         address storeAddress,
-        address merchantAddress
+        address groupAddress
     ) external view returns(RelationType) {
-        return storeMerchantRelationInfo[storeAddress][merchantAddress];
+        return storeGroupRelationInfo[storeAddress][groupAddress];
     }
 
-    function getMerchantStoresList(
-        address merchantAddress,
+    function getGroupStoresList(
+        address groupAddress,
         RelationType relationType
     ) external view returns(address[] memory) {
         if(relationType == RelationType.FEEFREE) {
-            return merchentStoresList[merchantAddress].FeeFree;
+            return merchentStoresList[groupAddress].FeeFree;
         } else if(relationType == RelationType.FEESELFPAY) {
-            return merchentStoresList[merchantAddress].FeeSelfPay;
+            return merchentStoresList[groupAddress].FeeSelfPay;
         } else {
             revert("Invalid type");
         }
     }
 
-    function getMerchantFromStore(address storeAddress) external view returns (address) {
-        return storeToMerchant[storeAddress];
+    function getGroupFromStore(address storeAddress) external view returns (address) {
+        return storeToGroup[storeAddress];
     }
 
-    function _addToMerchantStoresList(
-        address merchantAddress, 
+    function _addToGroupStoresList(
+        address groupAddress, 
         address storeAddress, 
         RelationType relationType
     ) internal {
         if(relationType == RelationType.FEEFREE) {
-            merchentStoresList[merchantAddress].FeeFree.push(storeAddress);
+            merchentStoresList[groupAddress].FeeFree.push(storeAddress);
         } else if(relationType == RelationType.FEESELFPAY) {
-            merchentStoresList[merchantAddress].FeeSelfPay.push(storeAddress);
+            merchentStoresList[groupAddress].FeeSelfPay.push(storeAddress);
         } else {
             revert("Invalid type");
         }
     } 
 
-    function _removeFromMerchantStoresList(
-        address merchantAddress, 
+    function _removeFromGroupStoresList(
+        address groupAddress, 
         address storeAddress
     ) internal {
         address[] storage addresses;
-        if(storeMerchantRelationInfo[storeAddress][merchantAddress] == RelationType.FEEFREE) {
-            addresses = merchentStoresList[merchantAddress].FeeFree;
-        } else if(storeMerchantRelationInfo[storeAddress][merchantAddress] == RelationType.FEESELFPAY) {
-            addresses = merchentStoresList[merchantAddress].FeeSelfPay;
+        if(storeGroupRelationInfo[storeAddress][groupAddress] == RelationType.FEEFREE) {
+            addresses = merchentStoresList[groupAddress].FeeFree;
+        } else if(storeGroupRelationInfo[storeAddress][groupAddress] == RelationType.FEESELFPAY) {
+            addresses = merchentStoresList[groupAddress].FeeSelfPay;
         } else {
             revert("Not in the list");
         }
@@ -213,37 +213,37 @@ contract UserManager {
         }
     }
 
-    // set relation between Merchant and Store,  FEEFREE or FEESELFPAY
-    function manageMerchantStoreRelation(
-        address merchantAddress, 
+    // set relation between Group and Store,  FEEFREE or FEESELFPAY
+    function manageGroupStoreRelation(
+        address groupAddress, 
         address storeAddress,
         RelationType relationType
     ) external onlyUserAdmin {
-        require(userTypeInfo[merchantAddress] == UserType.MERCHANT, "MerchantAddress is not merchant");
+        require(userTypeInfo[groupAddress] == UserType.GROUP, "GroupAddress is not Group");
         require(userTypeInfo[storeAddress] == UserType.STORE, "StoreAddress is not Store");
         require(relationType != RelationType.UNDEFINED, "Invalid type");
 
-        RelationType previousRelationType = storeMerchantRelationInfo[storeAddress][merchantAddress];
+        RelationType previousRelationType = storeGroupRelationInfo[storeAddress][groupAddress];
         require(previousRelationType != relationType, "Already set");
         require(uint8(previousRelationType) > 1 || uint8(relationType) > 1, "Invalid type");
 
-        address previousMerchantAddress = storeToMerchant[storeAddress];
-        require(previousMerchantAddress == merchantAddress || previousMerchantAddress == address(0), "Store set by other merchant");
+        address previousGroupAddress = storeToGroup[storeAddress];
+        require(previousGroupAddress == groupAddress || previousGroupAddress == address(0), "Store set by other Group");
 
         if(uint8(previousRelationType) > 1) {
-            _removeFromMerchantStoresList(merchantAddress, storeAddress);
+            _removeFromGroupStoresList(groupAddress, storeAddress);
         }
 
         if(relationType == RelationType.CLEARED){
-            storeToMerchant[storeAddress] = address(0);
+            storeToGroup[storeAddress] = address(0);
         } else {
-            storeToMerchant[storeAddress] = merchantAddress;
-            _addToMerchantStoresList(merchantAddress, storeAddress, relationType);
+            storeToGroup[storeAddress] = groupAddress;
+            _addToGroupStoresList(groupAddress, storeAddress, relationType);
         }
         
-        storeMerchantRelationInfo[storeAddress][merchantAddress] = relationType;
+        storeGroupRelationInfo[storeAddress][groupAddress] = relationType;
 
-        emit MerchantStoreRelationChanged(merchantAddress, storeAddress, relationType, previousRelationType);
+        emit GroupStoreRelationChanged(groupAddress, storeAddress, relationType, previousRelationType);
 
     }
 
@@ -288,7 +288,7 @@ contract UserManager {
         emit ClerksListChanged(storeAddress, removeClerkAddress, false);
     }
 
-    // Contract businessEntity means Merchants/Stores who can use this contract in router
+    // Contract businessEntity means Groups/Stores who can use this contract in router
     function getContractBERelation(
         address contractAddress,
         address businessEntityAddress
@@ -374,11 +374,11 @@ contract UserManager {
         address businessEntityAddress,
         RelationType targetType
     ) external onlyUserAdmin onlyOriginalContract(contractAddress) {
-        require(userTypeInfo[businessEntityAddress] == UserType.STORE || userTypeInfo[businessEntityAddress] == UserType.MERCHANT, "BE must be Merchant/Store");
+        require(userTypeInfo[businessEntityAddress] == UserType.STORE || userTypeInfo[businessEntityAddress] == UserType.GROUP, "BE must be Group/Store");
 
         require(senderAddress == IGenericContract(contractAddress).creator(), "Only for contract creator");
 
-        RelationType businessEntityCreatorRelation = storeMerchantRelationInfo[businessEntityAddress][IGenericContract(contractAddress).creator()];
+        RelationType businessEntityCreatorRelation = storeGroupRelationInfo[businessEntityAddress][IGenericContract(contractAddress).creator()];
         require(targetType != businessEntityCreatorRelation, "Already had authorization");
 
         require(targetType != RelationType.UNDEFINED, "Invalid type");
