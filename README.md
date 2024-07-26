@@ -1,12 +1,12 @@
-ver.0.3 20240725 deploying  
+ver.0.3 20240727 deployed  
 Merchant => Group  
 Polygon Amoy Test Network  
-AdminControler:   
-PointFactory:   
-UserManager:   
-Router:   
-CarinaCredit:   
-PointCRN:     
+AdminControler: 0x1ef64326f9a99bf0671c5ef513352a11cf58a50f  
+PointFactory: 0x8E8BDddCeD171FDCD3D31DEa595Dc9Acb06e235e  
+UserManager: 0x8AA5F10f3DEA59ac8063f95294eDfc8E2E0F32a5  
+Router: 0x78d75f9de65461B93D736E328317891d529B9e01  
+CarinaCredit: 0xd88329E2e7dDf599938088335bc713853652AFd7  
+PointCRN: 0x5A8b9300016779196a3ff82B973C9a67e89b8061    
 TOKENCRN: 0x29c24a487e95ed0bF4b88BDea0eAFB11f8C1955a  
 
 
