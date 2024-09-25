@@ -1,3 +1,17 @@
+ver.0.4 20240925 deployed   
+MDeleted struct TokenValue  
+Polygon Amoy Test Network  
+AdminControler: 0x1ef64326f9a99bf0671c5ef513352a11cf58a50f  
+PointFactory(New): 0x51A674d419D816f31f90e8d927D26A168Cb5A58a  
+UserManager(New): 0xA46667084c518788dFb1d2C55D97D2AeB32C9cCe  
+Router(New): 0xe7FF6f60B10377349772a9eEbe551c82137C0Ca5  
+CarinaCredit(New): 0x747BB7FdFa6A4aA67500Fb3Fc67Aa9d6A1E450D1  
+PointCRN(New): 0xFac0B8AcD043E9A7DF7A8d1fe1157308AE92b10A    
+TOKENCRN: 0x29c24a487e95ed0bF4b88BDea0eAFB11f8C1955a  
+
+
+
+
 ver.0.3 20240727 deployed  
 Merchant => Group  
 Polygon Amoy Test Network  
