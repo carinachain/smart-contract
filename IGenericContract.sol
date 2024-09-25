@@ -28,6 +28,6 @@ interface IGenericContract is IERC20Metadata {
     function mintSwitchStatus() external view returns (bool);
 
     // tokenValue
-    function thisTokenValue() external view returns (TokenValue memory);
+    // function thisTokenValue() external view returns (TokenValue memory);
 
 }

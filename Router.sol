@@ -112,7 +112,7 @@ contract Router {
         string calldata name, 
         string calldata symbol, 
         uint8 decimals,
-        TokenValue calldata tokenValue,
+        // TokenValue calldata tokenValue,
         uint256 feeAmount
     ) external onlyRouterAdmin notOverLimit(creatorAddress, targetType) {
         _payFee(creatorAddress, feeAmount);
@@ -120,7 +120,7 @@ contract Router {
 
         if(targetType == ContractType.POINT){
             require(userManager.getUserType(creatorAddress) == UserType.STORE || userManager.getUserType(creatorAddress) == UserType.GROUP, "Creator must be Group/Store");
-            newCreationAddress = pointFactory.createPoint(creatorAddress, targetType, name, symbol, decimals, tokenValue.valueAmount, tokenValue.valueCurrency);
+            newCreationAddress = pointFactory.createPoint(creatorAddress, targetType, name, symbol, decimals);
         } else {
             revert("Unavailable type");
         }

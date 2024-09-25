@@ -15,7 +15,7 @@ contract Point is ERC20, ERC20Pausable, Ownable {
     uint8 private _decimals;
     address private _creator;
 
-    TokenValue private _thisTokenValue;
+    // TokenValue private _thisTokenValue;
 
     uint256 private _distributeLimit;
 
@@ -42,9 +42,9 @@ contract Point is ERC20, ERC20Pausable, Ownable {
         ContractType createContractType, 
         string memory name_, 
         string memory symbol_, 
-        uint8 decimals_,
-        uint256 valueAmount_,
-        string memory valueCurrency_
+        uint8 decimals_
+        // uint256 valueAmount_,
+        // string memory valueCurrency_
     ) ERC20(name_, symbol_) Ownable(msg.sender) {
         if (creatorAddress_ == address(0)) {
             revert ERC20InvalidSender(address(0));
@@ -54,7 +54,7 @@ contract Point is ERC20, ERC20Pausable, Ownable {
         _creator = creatorAddress_;
         _decimals = decimals_;
         thisContractType = createContractType;
-        _thisTokenValue = TokenValue(valueAmount_, valueCurrency_);
+        // _thisTokenValue = TokenValue(valueAmount_, valueCurrency_);
 
         // default distributeLimit is 100000
         _distributeLimit = 100000 * (10 ** uint256(decimals_));
@@ -72,10 +72,10 @@ contract Point is ERC20, ERC20Pausable, Ownable {
         return _decimals;
     }
 
-    // this contract type
-    function thisTokenValue() external view returns (TokenValue memory) {
-        return _thisTokenValue;
-    }
+    // this contract TokenValue
+    // function thisTokenValue() external view returns (TokenValue memory) {
+    //     return _thisTokenValue;
+    // }
 
     // distribution
     function distribute(

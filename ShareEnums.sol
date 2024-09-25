@@ -49,7 +49,7 @@ enum ContractType {
     OTHER_THREE
 }
 
-struct TokenValue {
-    uint256 valueAmount;
-    string valueCurrency;
-}
+// struct TokenValue {
+//     uint256 valueAmount;
+//     string valueCurrency;
+// }

@@ -53,11 +53,11 @@ contract PointFactory is Ownable {
         ContractType createContractType, 
         string calldata name, 
         string calldata symbol,
-        uint8 decimals, 
-        uint256 valueAmount,
-        string calldata valueCurrency
+        uint8 decimals
+        // uint256 valueAmount,
+        // string calldata valueCurrency
     ) external onlyPointAdmin returns (address) {
-        Point newPointContract = new Point(creatorAddress, createContractType, name, symbol, decimals, valueAmount, valueCurrency);
+        Point newPointContract = new Point(creatorAddress, createContractType, name, symbol, decimals);
         emit PointCreated(address(newPointContract), creatorAddress);
         return address(newPointContract);
     }
