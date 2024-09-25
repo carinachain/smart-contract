@@ -71,11 +71,11 @@ contract UserManager {
 
         address CCRAddress = adminControler.getContractAddress(ContractType.CREDITPOINT);
         creationList[IGenericContract(CCRAddress).creator()][ContractType.CREDITPOINT].push(CCRAddress);
-        userTypeInfo[IGenericContract(CCRAddress).creator()] = UserType.SERVICEPROVIDER;
+        // userTypeInfo[IGenericContract(CCRAddress).creator()] = UserType.SERVICEPROVIDER;
 
         address pCRNAddress = adminControler.getContractAddress(ContractType.POINTCRN);
         creationList[IGenericContract(pCRNAddress).creator()][ContractType.POINTCRN].push(pCRNAddress);
-        userTypeInfo[IGenericContract(pCRNAddress).creator()] = UserType.SERVICEPROVIDER;
+        // userTypeInfo[IGenericContract(pCRNAddress).creator()] = UserType.SERVICEPROVIDER;
     }
 
 
