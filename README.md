@@ -1,3 +1,18 @@
+ver.0.5 20241016 deployed  
+*****Feature & Contract address changed*****  
+Polygon Amoy Test Network  
+***Router: 0xB604c34F53B4CB39c7Fa8f3dfB2256A77753cC08***  
+***UserManager: 0xA87DA70f1Ec5436726c554AB56A7668896CbD87A***  
+AdminControler: 0xfA59ddFd6B08879e57128EB6dEED299b6Dac03a2  
+PointFactory: 0x0cF5Dc951bdB36FC0F87F861DD680b8c28cF705d  
+CarinaCredit: 0x348Ef518161787f67f637a8905b0bC3FB036F3e4  
+PointCRN: 0x942d0320a45e17A3413142A81413e1978D48dB76   
+TOKENCRN: 0x29c24a487e95ed0bF4b88BDea0eAFB11f8C1955a  
+  
+  
+  
+
+
 ver.0.4 20240925 deployed   
 MDeleted struct TokenValue  
 Polygon Amoy Test Network  
