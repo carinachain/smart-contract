@@ -4,12 +4,9 @@ pragma solidity ^0.8.20;
 enum UserType {
     UNREGISTERED,
     DELETED,
+    GENERAL,
     GROUP,
     STORE,
-    CLERK,
-    GENERAL,
-    BUSINESSPARTNER,
-    THIRDPARTY,
     SERVICEPROVIDER,
     ADMINISTRATOR,
     OTHERS
@@ -29,14 +26,11 @@ enum ContractType {
     STAMP,
     SWAPPOOL,
     MISSION,
-    THIRDPARTY,
-    USER,
     POINTFACTORY,
     COUPONFACTORY,
     STAMPFACTORY,
     SWAPPOOLFACTORY,
     MISSIONFACTORY,
-    THIRDPARTYFACTORY,
     ADMINCONTROLER,
     USERMANAGER,
     ROUTER,
@@ -46,10 +40,6 @@ enum ContractType {
     CRNTOKEN,
     OTHER_ONE,
     OTHER_TWO,
-    OTHER_THREE
+    OTHER_THREE,
+    OTHER_FOUR
 }
-
-// struct TokenValue {
-//     uint256 valueAmount;
-//     string valueCurrency;
-// }

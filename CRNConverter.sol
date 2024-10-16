@@ -13,9 +13,9 @@ contract CRNConverter {
     ContractType public constant thisContractType = ContractType.CRNCONVERTER;
 
     AdminControler private  adminControler;
-    PointFactory private pointFactory;
-    address private CRNAddress;
-    address private pCRNAddress;
+    // PointFactory private pointFactory;
+    // address private CRNAddress;
+    // address private pCRNAddress;
 
     event PCRNMited(address indexed sender, uint256 amount);
     event CRNWithdrew(address indexed sender, uint256 amount);
@@ -32,19 +32,18 @@ contract CRNConverter {
     }
 
 
-    
     constructor(address adminControlerAddress) {
         adminControler = AdminControler(adminControlerAddress);
-        pointFactory = PointFactory(adminControler.getContractAddress(ContractType.POINTFACTORY));
-        CRNAddress = adminControler.getContractAddress(ContractType.CRNTOKEN);
-        pCRNAddress = adminControler.getContractAddress(ContractType.POINTCRN);
     }
 
     // Deposit CRN in contract to mint pointCRN (need approve mint amout to contract first)
     function mintpCRN(
         uint256 mintAmount
     ) external onlyRegisteredUser(msg.sender) {
+        address CRNAddress = adminControler.getContractAddress(ContractType.CRNTOKEN);
+        address pCRNAddress = adminControler.getContractAddress(ContractType.POINTCRN);
         require(IERC20(CRNAddress).transferFrom(msg.sender, address(this), mintAmount), "CRN transfer failed");
+        PointFactory pointFactory = PointFactory(adminControler.getContractAddress(ContractType.POINTFACTORY));
         pointFactory.distributePoint(pCRNAddress, address(this), msg.sender, mintAmount);
         emit PCRNMited(msg.sender, mintAmount);
     }
@@ -55,6 +54,9 @@ contract CRNConverter {
         uint256 withdrawAmount, 
         uint256 feeAmount
     ) external onlyConverterAdmin onlyRegisteredUser(senderAddress){
+        address CRNAddress = adminControler.getContractAddress(ContractType.CRNTOKEN);
+        address pCRNAddress = adminControler.getContractAddress(ContractType.POINTCRN);
+        PointFactory pointFactory = PointFactory(adminControler.getContractAddress(ContractType.POINTFACTORY));
         pointFactory.transferPoint(adminControler.getContractAddress(ContractType.CREDITPOINT), senderAddress, address(this), feeAmount);
         pointFactory.deductPoint(pCRNAddress, address(this), senderAddress, withdrawAmount);  //check senderAddress withdrawAmount
         IERC20(CRNAddress).transfer(senderAddress, withdrawAmount);

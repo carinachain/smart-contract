@@ -14,25 +14,19 @@ contract Point is ERC20, ERC20Pausable, Ownable {
     
     uint8 private _decimals;
     address private _creator;
-
-    // TokenValue private _thisTokenValue;
-
-    uint256 private _distributeLimit;
-
-    bool private _mintSwitch;
-    
     bool private _transferSwitch;
+
+    // 2024/10/12 add
+    mapping(address => uint256) private _lastBalanceUpdateTime;
 
     event Distributed(address indexed senderAddress, address indexed userAddress, uint256 amount);
     event Deducted(address indexed senderAddress, address indexed userAddress, uint256 amount);
-    event MintSwitchChanged(address senderAddress, bool indexed newValue);
     event TransferSwitchChanged(bool indexed newValue);
-    event DistributeLimitChanged(uint indexed priviousValue, uint indexed newValue);
-    event CreatorChanged(address indexed newCreator, address indexed previousCreator );
+    event CreatorChanged(address indexed previousCreator, address indexed newCreator);
     event PauseStatusChanged(address senderAddress, bool indexed newValue);
 
     modifier onlyCreator(address senderAddress) {
-        require(senderAddress == _creator, "Only for creator");
+        require(senderAddress == _creator, "CreatorAddress only");
         _;
     }
 
@@ -43,39 +37,30 @@ contract Point is ERC20, ERC20Pausable, Ownable {
         string memory name_, 
         string memory symbol_, 
         uint8 decimals_
-        // uint256 valueAmount_,
-        // string memory valueCurrency_
     ) ERC20(name_, symbol_) Ownable(msg.sender) {
         if (creatorAddress_ == address(0)) {
             revert ERC20InvalidSender(address(0));
         }
-        require(createContractType != ContractType.UNDEFINED, "Invalid type");
+        require(createContractType != ContractType.UNDEFINED, "Invalid ContractType");
 
         _creator = creatorAddress_;
         _decimals = decimals_;
         thisContractType = createContractType;
-        // _thisTokenValue = TokenValue(valueAmount_, valueCurrency_);
-
-        // default distributeLimit is 100000
-        _distributeLimit = 100000 * (10 ** uint256(decimals_));
-
-        // default mint switch is on
-        _mintSwitch = true;
 
         // default transfer switch off only permit transfer through owner 
         _transferSwitch = false;
-
     }
+
 
     // get decimals
     function decimals() public view virtual override returns (uint8) {
         return _decimals;
     }
 
-    // this contract TokenValue
-    // function thisTokenValue() external view returns (TokenValue memory) {
-    //     return _thisTokenValue;
-    // }
+    // 2024/10/12 add function
+    function getAddressBalanceTimeStamp(address targetAddress) external view returns (uint256, uint256) {
+        return (balanceOf(targetAddress), _lastBalanceUpdateTime[targetAddress]);
+    }
 
     // distribution
     function distribute(
@@ -83,12 +68,8 @@ contract Point is ERC20, ERC20Pausable, Ownable {
         address userAddress, 
         uint256 amount
     ) external  onlyOwner {
-        require(_mintSwitch, "Mint stoped");
         require(amount != 0, "Invalid amount");
-        require(amount <= _distributeLimit, "Amount reached distribute limit");
-
         _mint(userAddress, amount);
-
         emit Distributed(senderAddress, userAddress, amount);
     }
 
@@ -104,40 +85,13 @@ contract Point is ERC20, ERC20Pausable, Ownable {
     }
 
     // only owner transfer
-    function pTransfer(address from, address to, uint256 amount) external onlyOwner returns (bool) {
+    function pTransfer(
+        address from, 
+        address to, 
+        uint256 amount
+    ) external onlyOwner returns (bool) {
         _transfer(from, to, amount);
         return true;
-    }
-
-    // get distribute limit info
-    function distributeLimitInfo() external view returns (uint256) {
-        return _distributeLimit;
-    }
-
-    // change distribte limit
-    function changeDistributeLimit(
-        address senderAddress, 
-        uint256 newValue
-    ) external onlyOwner onlyCreator(senderAddress) {
-        uint256 priviousDistribueLimit = _distributeLimit;
-        require(newValue != priviousDistribueLimit);
-        _distributeLimit = newValue;
-        emit DistributeLimitChanged(priviousDistribueLimit, newValue);
-    }
-
-    // get mint switch's status
-    function mintSwitchStatus() external view returns (bool) {
-        return _mintSwitch;
-    }
-
-    // mint switch setting
-    function setMintSwitch(
-        address senderAddress, 
-        bool value
-    ) external onlyOwner onlyCreator(senderAddress) {
-        require(value != _mintSwitch, "Already set");
-        _mintSwitch = value;
-        emit MintSwitchChanged(senderAddress, value);
     }
 
     // get transfer switch's status
@@ -146,16 +100,28 @@ contract Point is ERC20, ERC20Pausable, Ownable {
     }
 
     // transfer switch setting
-    function setTransferSwitch(bool value) external onlyOwner {
-        require(value != _transferSwitch, "Already set");
-        _transferSwitch = value;
-        emit TransferSwitchChanged(value);
+    function setTransferSwitch(bool newValue) external onlyOwner {
+        require(newValue != _transferSwitch, "value is same as now");
+        _transferSwitch = newValue;
+        emit TransferSwitchChanged(newValue);
     }
 
+    // 2024/10/12 update for _lastBalanceUpdataTime
     // switch off: only can transfer through owner; switch on: can transfer by user-self 
-    function _update(address from, address to, uint256 value) internal override(ERC20, ERC20Pausable) {
+    function _update(
+        address from, 
+        address to, 
+        uint256 value
+    ) internal override(ERC20, ERC20Pausable) {
         require(msg.sender == owner() || _transferSwitch, "No authorization to transfer");
         super._update(from, to, value);
+
+        if(from != address(0)){
+            _lastBalanceUpdateTime[from] = block.timestamp;
+        }
+        if(to != address(0)){
+            _lastBalanceUpdateTime[to] = block.timestamp;
+        }
     }
 
     // get creator address
@@ -171,22 +137,22 @@ contract Point is ERC20, ERC20Pausable, Ownable {
         if (newCreator == address(0)) {
             revert ERC20InvalidSender(address(0));
         }
-        require(newCreator != senderAddress, "Already set");
+        require(newCreator != senderAddress, "newCreator is same as now");
         _creator = newCreator;
-        emit CreatorChanged(newCreator, senderAddress);
+        emit CreatorChanged(senderAddress, newCreator);
     }
     
     function changePauseStatus(
         address senderAddress, 
-        bool value
+        bool newValue
     ) public onlyOwner onlyCreator(senderAddress) {
-        require(value != paused(), "Already set");
-        if(value){
+        require(newValue != paused(), "newValue is same as now");
+        if(newValue){
             _pause();
         } else {
             _unpause();
         }
-        emit PauseStatusChanged(senderAddress, value);
+        emit PauseStatusChanged(senderAddress, newValue);
     }
 
 }

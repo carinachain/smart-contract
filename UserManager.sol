@@ -12,55 +12,26 @@ contract UserManager {
 
     AdminControler private adminControler;
 
-    mapping(address => UserType) private userTypeInfo;
-
-    mapping(address => mapping(ContractType => address[])) private creationList;
-
     struct AddressList {
         address[] FeeFree;
         address[] FeeSelfPay;
     }
 
-    mapping(address => AddressList) private merchentStoresList;
-
+    mapping(address => UserType) private userTypeInfo;
+    mapping(address => mapping(ContractType => address[])) private creationList;
+    mapping(address => AddressList) private groupStoresList;
     mapping(address => mapping(address => RelationType)) private storeGroupRelationInfo;
-
     mapping(address => address) private storeToGroup;
-
-    mapping(address => address[]) private clerksList;
-
-    // 7/13 change to store
-    mapping(address => address) private clerkToStore;
-
-    // 7/13 change to BusinessEntity
-    mapping(address => AddressList) private contractBusinessEntityList;
-
-    // 7/13 change to BusinessEntity
+    mapping(address => mapping(UserType => AddressList)) private contractBusinessEntityList;
     mapping(address => mapping(address => RelationType)) private contractBusinessEntityRelationInfo;
-
-    // 7/13 chenge to operatable
-    mapping(address => AddressList) private operatableContractsList;
-
+    mapping(address => mapping(ContractType => AddressList)) private beOperatableContractsList;
 
     event UserSet(address indexed userAddress, UserType indexed userType);
-    event GroupStoreRelationChanged(address indexed userAddress, address indexed targetAddress, RelationType indexed newRelationType, RelationType previousRelationType);
-    event ContractBusinessEntityChanged(address indexed contractAddress, address indexed operatorAddress, RelationType indexed newType, RelationType previousType);
-    event ClerksListChanged(address indexed storeAddress, address indexed clerkAddress, bool indexed isAdd);
+    event GroupStoreRelationChanged(address indexed groupAddress, address indexed storeAddress, RelationType previousType, RelationType indexed newType);
+    event ContractBusinessEntityChanged(address indexed contractAddress, address indexed beAddress, RelationType previousType, RelationType indexed newType);
 
-    modifier onlyUserAdmin() {
-        require(adminControler.checkAdmin(msg.sender, thisContractType), "Need admin");
-        _;
-    }
-
-
-    modifier onlyOriginalContract(address targetAddress) {
-        bool result;
-        try IGenericContract(targetAddress).thisContractType() returns (ContractType) {
-            result = true;
-        } catch {
-            result = false;
-        }
-        require(result, "Not original contract");
+    modifier onlyUserManagerAdmin() {
+        require(adminControler.checkAdmin(msg.sender, thisContractType), "Need UserManagerAdmin");
         _;
     }
     
@@ -71,11 +42,9 @@ contract UserManager {
 
         address CCRAddress = adminControler.getContractAddress(ContractType.CREDITPOINT);
         creationList[IGenericContract(CCRAddress).creator()][ContractType.CREDITPOINT].push(CCRAddress);
-        // userTypeInfo[IGenericContract(CCRAddress).creator()] = UserType.SERVICEPROVIDER;
 
         address pCRNAddress = adminControler.getContractAddress(ContractType.POINTCRN);
         creationList[IGenericContract(pCRNAddress).creator()][ContractType.POINTCRN].push(pCRNAddress);
-        // userTypeInfo[IGenericContract(pCRNAddress).creator()] = UserType.SERVICEPROVIDER;
     }
 
 
@@ -85,24 +54,39 @@ contract UserManager {
         return userTypeInfo[userAddress];
     }
 
-    // add/remove
-    function manageUser(
+    function checkManageUserType(
         address userAddress, 
         UserType userType
-    ) external onlyUserAdmin {
-        require(userAddress != address(0), "Invalid address");
+    ) public view returns (bool, string memory) {
+        if(userAddress == address(0)){
+            return (false, "userAddress cannot be zero");
+        }
+        if(userType == UserType.UNREGISTERED){
+            return (false, "userType cannot be UNREGISTERED");
+        }
         if(userTypeInfo[userAddress] == UserType.DELETED){
-            revert("User was deleted");
+            return (false, "Deleted user cannot set");
         } else if(userTypeInfo[userAddress] == UserType.UNREGISTERED) {
-            require(uint8(userType) > 1, "Invalid type");
+            if(userType == UserType.DELETED) {
+                return (false, "Can not set UNREGISTERED user to DELETED");
+            }
         } else if(userType != UserType.DELETED){
-            revert("Can only set once");
-        } 
+            return (false, "UserType already set, cannot be modified");
+        }
+        return (true, "");
+    }
+
+    // add/remove
+    function manageUserType(
+        address userAddress, 
+        UserType userType
+    ) external onlyUserManagerAdmin {
+        (bool checkResult, string memory errorMessage) = checkManageUserType(userAddress, userType);
+        require(checkResult, errorMessage);
 
         userTypeInfo[userAddress] = userType;
         emit UserSet(userAddress, userType);
     }
-
 
     // get Creator's creation address list by creation type
     function getCreationAddressList(
@@ -112,38 +96,33 @@ contract UserManager {
         return creationList[creatorAddress][targetType];
     }
 
-    // check if address is already in list
-    function _isInList(
-        address[] memory list, 
-        address targetAddress
-    ) internal pure returns (bool) {
-        for (uint256 i = 0; i < list.length; i++) {
-            if (list[i] == targetAddress) {
-                return true;
-            }
+    function _isOriginalContract(address targetAddress) internal view returns (bool) {
+        uint256 size;
+        assembly { size := extcodesize(targetAddress) }
+        if (size == 0) {
+            return false;
         }
-        return false;
+        try IGenericContract(targetAddress).thisContractType() returns (ContractType) {
+            return true;
+        } catch {
+            return false;
+        }
     }
 
     // add user's creation address to user's list
     function addToCreationList(
         address addCreationAddress
-    ) external onlyUserAdmin onlyOriginalContract(addCreationAddress) {
-        address creatorAddress = IGenericContract(addCreationAddress).creator();
-        ContractType contractType = IGenericContract(addCreationAddress).thisContractType();
-        address[] memory addressList = creationList[creatorAddress][contractType];
-        require(!_isInList(addressList, addCreationAddress), "Already added");
-        creationList[creatorAddress][contractType].push(addCreationAddress);
+    ) external onlyUserManagerAdmin {
+        require(_isOriginalContract(addCreationAddress), "addCreationAddress is not carina original contract");
+        creationList[IGenericContract(addCreationAddress).creator()][IGenericContract(addCreationAddress).thisContractType()].push(addCreationAddress);
     }
 
     // remove creation address from user's list
     function removeFromCreationList(
         address removeCreationAddress
-    ) external onlyUserAdmin onlyOriginalContract(removeCreationAddress) {
-        address creatorAddress = IGenericContract(removeCreationAddress).creator();
-        ContractType contractType = IGenericContract(removeCreationAddress).thisContractType();
-        address[] storage addresses = creationList[creatorAddress][contractType];
-        require(_isInList(addresses, removeCreationAddress), "Not in the list");
+    ) external onlyUserManagerAdmin {
+        require(_isOriginalContract(removeCreationAddress), "removeCreationAddress is not carina original contract");
+        address[] storage addresses = creationList[IGenericContract(removeCreationAddress).creator()][IGenericContract(removeCreationAddress).thisContractType()];
         for (uint256 i = 0; i < addresses.length; i++) {
             if (addresses[i] == removeCreationAddress) {
                 addresses[i] = addresses[addresses.length - 1];
@@ -160,17 +139,11 @@ contract UserManager {
         return storeGroupRelationInfo[storeAddress][groupAddress];
     }
 
-    function getGroupStoresList(
-        address groupAddress,
-        RelationType relationType
-    ) external view returns(address[] memory) {
-        if(relationType == RelationType.FEEFREE) {
-            return merchentStoresList[groupAddress].FeeFree;
-        } else if(relationType == RelationType.FEESELFPAY) {
-            return merchentStoresList[groupAddress].FeeSelfPay;
-        } else {
-            revert("Invalid type");
-        }
+    function getGroupStoresList(address groupAddress) external view returns(address[] memory, address[] memory) {
+        return (
+            groupStoresList[groupAddress].FeeFree,
+            groupStoresList[groupAddress].FeeSelfPay
+        );
     }
 
     function getGroupFromStore(address storeAddress) external view returns (address) {
@@ -183,12 +156,11 @@ contract UserManager {
         RelationType relationType
     ) internal {
         if(relationType == RelationType.FEEFREE) {
-            merchentStoresList[groupAddress].FeeFree.push(storeAddress);
-        } else if(relationType == RelationType.FEESELFPAY) {
-            merchentStoresList[groupAddress].FeeSelfPay.push(storeAddress);
-        } else {
-            revert("Invalid type");
-        }
+            groupStoresList[groupAddress].FeeFree.push(storeAddress);
+        } 
+        if(relationType == RelationType.FEESELFPAY) {
+            groupStoresList[groupAddress].FeeSelfPay.push(storeAddress);
+        } 
     } 
 
     function _removeFromGroupStoresList(
@@ -197,13 +169,12 @@ contract UserManager {
     ) internal {
         address[] storage addresses;
         if(storeGroupRelationInfo[storeAddress][groupAddress] == RelationType.FEEFREE) {
-            addresses = merchentStoresList[groupAddress].FeeFree;
+            addresses = groupStoresList[groupAddress].FeeFree;
         } else if(storeGroupRelationInfo[storeAddress][groupAddress] == RelationType.FEESELFPAY) {
-            addresses = merchentStoresList[groupAddress].FeeSelfPay;
+            addresses = groupStoresList[groupAddress].FeeSelfPay;
         } else {
-            revert("Not in the list");
+            revert();
         }
-        
         for (uint256 i = 0; i < addresses.length; i++) {
             if (addresses[i] == storeAddress) {
                 addresses[i] = addresses[addresses.length - 1];
@@ -213,79 +184,57 @@ contract UserManager {
         }
     }
 
-    // set relation between Group and Store,  FEEFREE or FEESELFPAY
-    function manageGroupStoreRelation(
+    function checkManageGroupStore(
+        address groupAddress, 
+        address storeAddress, 
+        RelationType relationType
+    ) public view returns(bool, string memory) {
+        if(userTypeInfo[groupAddress] != UserType.GROUP){
+            return(false, "groupAddress UserType must be GROUP");
+        }
+        if(userTypeInfo[storeAddress] != UserType.STORE){
+            return(false, "storeAddress UserType must be STORE");
+        }
+        if(relationType == RelationType.UNDEFINED){
+            return(false, "relationType cannot be UNDEFINED");
+        }
+        if((relationType == RelationType.CLEARED && uint8(storeGroupRelationInfo[storeAddress][groupAddress]) <= 1)){
+            return(false, "Cannot change UNDEFINED/CLEARED to CLEARED");
+        }
+        if(relationType == storeGroupRelationInfo[storeAddress][groupAddress]){
+            return(false, "relationType is same value as current");
+        }
+        if(storeToGroup[storeAddress] != groupAddress && storeToGroup[storeAddress] != address(0)){
+            return(false, "Store already joined another group");
+        }
+        if(adminControler.isInsufficientCredit(groupAddress, msg.sender, "manageGroupStore")){
+            return(false, "groupAddress insufficient credit");
+        }
+        return(true, "");
+    }
+
+    // set relation between Group and Store
+    function manageGroupStore(
         address groupAddress, 
         address storeAddress,
         RelationType relationType
-    ) external onlyUserAdmin {
-        require(userTypeInfo[groupAddress] == UserType.GROUP, "GroupAddress is not Group");
-        require(userTypeInfo[storeAddress] == UserType.STORE, "StoreAddress is not Store");
-        require(relationType != RelationType.UNDEFINED, "Invalid type");
+    ) external onlyUserManagerAdmin {
+        (bool checkResult, string memory errorMessage) = checkManageGroupStore(groupAddress, storeAddress, relationType);
+        require(checkResult, errorMessage);
 
         RelationType previousRelationType = storeGroupRelationInfo[storeAddress][groupAddress];
-        require(previousRelationType != relationType, "Already set");
-        require(uint8(previousRelationType) > 1 || uint8(relationType) > 1, "Invalid type");
-
-        address previousGroupAddress = storeToGroup[storeAddress];
-        require(previousGroupAddress == groupAddress || previousGroupAddress == address(0), "Store set by other Group");
-
         if(uint8(previousRelationType) > 1) {
             _removeFromGroupStoresList(groupAddress, storeAddress);
         }
-
         if(relationType == RelationType.CLEARED){
             storeToGroup[storeAddress] = address(0);
         } else {
             storeToGroup[storeAddress] = groupAddress;
             _addToGroupStoresList(groupAddress, storeAddress, relationType);
         }
-        
         storeGroupRelationInfo[storeAddress][groupAddress] = relationType;
 
-        emit GroupStoreRelationChanged(groupAddress, storeAddress, relationType, previousRelationType);
-
-    }
-
-    function getStoreFromClerk(address clerkAddress) external view returns(address){
-        return clerkToStore[clerkAddress];
-    }
-
-    function getClerksList(address storeAddress) external view returns(address[] memory){
-        return clerksList[storeAddress];
-    }
-
-    // clerks only can add to store's list
-    function addClerk(
-        address storeAddress,
-        address clerkAddress
-    ) external onlyUserAdmin {
-        require(userTypeInfo[storeAddress] == UserType.STORE, "StoreAddress is not Store");
-        require(userTypeInfo[clerkAddress] == UserType.CLERK, "ClerkAddress is not Clerk");
-        require(clerkToStore[clerkAddress] != storeAddress, "Already added");
-        require(clerkToStore[clerkAddress] == address(0), "Clerk's store already set");
-        clerkToStore[clerkAddress] = storeAddress;
-        clerksList[storeAddress].push(clerkAddress);
-
-        emit ClerksListChanged(storeAddress, clerkAddress, true);
-    }
-
-    function removeClerk(
-        address storeAddress,
-        address removeClerkAddress
-    ) external onlyUserAdmin {
-        require(clerkToStore[removeClerkAddress] == storeAddress, "Not store's clerk");
-        
-        for (uint256 i = 0; i < clerksList[storeAddress].length; i++) {
-            if (clerksList[storeAddress][i] == removeClerkAddress) {
-                clerksList[storeAddress][i] = clerksList[storeAddress][clerksList[storeAddress].length - 1];
-                clerksList[storeAddress].pop();
-                break;
-            }
-        }
-        clerkToStore[removeClerkAddress] = address(0);
-
-        emit ClerksListChanged(storeAddress, removeClerkAddress, false);
+        emit GroupStoreRelationChanged(groupAddress, storeAddress, previousRelationType, relationType);
     }
 
     // Contract businessEntity means Groups/Stores who can use this contract in router
@@ -296,31 +245,19 @@ contract UserManager {
         return contractBusinessEntityRelationInfo[contractAddress][businessEntityAddress];
     }
 
-    function getOperatableContractsList(
-        address businessEntityAddress, 
-        RelationType typeValue
-    ) external view returns (address[] memory) {
-        if(typeValue == RelationType.FEEFREE) {
-            return operatableContractsList[businessEntityAddress].FeeFree;
-        } else if(typeValue == RelationType.FEESELFPAY) {
-            return operatableContractsList[businessEntityAddress].FeeSelfPay;
-        } else {
-            revert("Invalid type");
-        }
-    }
-
-    function _removeFromOperatableContractsList(
+    function _removeFromBEOperatableContractsList(
         address businessEntityAddress,
         address removeContractAddress
     ) internal {
         RelationType typeValue = contractBusinessEntityRelationInfo[removeContractAddress][businessEntityAddress];
+        ContractType contractType = IGenericContract(removeContractAddress).thisContractType();
         address[] storage addresses;
         if(typeValue == RelationType.FEEFREE) {
-            addresses = operatableContractsList[businessEntityAddress].FeeFree;
+            addresses = beOperatableContractsList[businessEntityAddress][contractType].FeeFree;
         } else if(typeValue == RelationType.FEESELFPAY) {
-            addresses = operatableContractsList[businessEntityAddress].FeeSelfPay;
+            addresses = beOperatableContractsList[businessEntityAddress][contractType].FeeSelfPay;
         } else {
-            revert("Not in the list");
+            revert();
         }
 
         for (uint256 i = 0; i < addresses.length; i++) {
@@ -334,15 +271,12 @@ contract UserManager {
 
     function getContractBEList(
         address contractAddress,
-        RelationType typeValue
-    ) external view returns(address[] memory){
-        if(typeValue == RelationType.FEEFREE) {
-            return contractBusinessEntityList[contractAddress].FeeFree;
-        } else if(typeValue == RelationType.FEESELFPAY) {
-            return contractBusinessEntityList[contractAddress].FeeSelfPay;
-        } else {
-            revert("Invalid type");
-        }
+        UserType userTypeValue
+    ) external view returns(address[] memory, address[] memory){
+        return (
+            contractBusinessEntityList[contractAddress][userTypeValue].FeeFree, 
+            contractBusinessEntityList[contractAddress][userTypeValue].FeeSelfPay
+        );
     }
 
     function _removeFromContractBEList(
@@ -351,11 +285,11 @@ contract UserManager {
     ) internal {
         address[] storage addresses;
         if(contractBusinessEntityRelationInfo[contractAddress][removeAddress] == RelationType.FEEFREE) {
-            addresses = contractBusinessEntityList[contractAddress].FeeFree;
+            addresses = contractBusinessEntityList[contractAddress][userTypeInfo[removeAddress]].FeeFree;
         } else if(contractBusinessEntityRelationInfo[contractAddress][removeAddress] == RelationType.FEESELFPAY) {
-            addresses = contractBusinessEntityList[contractAddress].FeeSelfPay;
+            addresses = contractBusinessEntityList[contractAddress][userTypeInfo[removeAddress]].FeeSelfPay;
         } else {
-            revert("Not in the list");
+            revert();
         }
 
         for (uint256 i = 0; i < addresses.length; i++) {
@@ -367,40 +301,85 @@ contract UserManager {
         }
     }
 
+    function checkManageContractBE(
+        address senderAddress,
+        address contractAddress,
+        address businessEntityAddress,
+        RelationType targetType
+    ) public view returns(bool, string memory)  {        
+        if(!_isOriginalContract(contractAddress)){
+            return(false, "contractAddress is not carina original contract");
+        } else {
+            if(senderAddress != IGenericContract(contractAddress).creator()){
+                return(false, "senderAddress is not contract creator");
+            }
+            if(uint8(userTypeInfo[businessEntityAddress]) <= 2){
+                return(false, "businessEntityAddress UserType do not have permission");
+            }
+            if(targetType == RelationType.UNDEFINED){
+                return(false, "targetType cannot be UNDEFINED");
+            }
+            if((targetType == RelationType.CLEARED && uint8(contractBusinessEntityRelationInfo[contractAddress][businessEntityAddress]) <= 1)){
+                return(false, "Cannot change UNDEFINED/CLEARED to CLEARED");
+            }
+            if(targetType == contractBusinessEntityRelationInfo[contractAddress][businessEntityAddress]){
+                return(false, "targetType is same value as current");
+            }
+            if(
+                targetType == storeGroupRelationInfo[businessEntityAddress][IGenericContract(contractAddress).creator()] && 
+                targetType != RelationType.CLEARED
+            ){
+                return(false, "businessEntityAddress already has same permission from parent group");
+            }
+            if(adminControler.isInsufficientCredit(senderAddress, msg.sender, "manageContractBE")){
+                return(false, "senderAddress insufficient credit");
+            }
+        }
+        return(true, "");
+    }
+
     // add/remove/change
     function manageContractBE(
         address senderAddress,
         address contractAddress,
         address businessEntityAddress,
         RelationType targetType
-    ) external onlyUserAdmin onlyOriginalContract(contractAddress) {
-        require(userTypeInfo[businessEntityAddress] == UserType.STORE || userTypeInfo[businessEntityAddress] == UserType.GROUP, "BE must be Group/Store");
+    ) external onlyUserManagerAdmin {
+        (bool result, string memory errorMessage) = checkManageContractBE(senderAddress, contractAddress, businessEntityAddress, targetType);
+        require(result, errorMessage);
 
-        require(senderAddress == IGenericContract(contractAddress).creator(), "Only for contract creator");
-
-        RelationType businessEntityCreatorRelation = storeGroupRelationInfo[businessEntityAddress][IGenericContract(contractAddress).creator()];
-        require(targetType != businessEntityCreatorRelation, "Already had authorization");
-
-        require(targetType != RelationType.UNDEFINED, "Invalid type");
         RelationType previousRelationType = contractBusinessEntityRelationInfo[contractAddress][businessEntityAddress];
-        require(previousRelationType != targetType, "Already set");
-        require(uint8(previousRelationType) > 1 || uint8(targetType) > 1, "Invalid type");
+        ContractType contractType = IGenericContract(contractAddress).thisContractType();
 
         if(uint8(previousRelationType) > 1) {
-            _removeFromOperatableContractsList(businessEntityAddress, contractAddress);
+            _removeFromBEOperatableContractsList(businessEntityAddress, contractAddress);
             _removeFromContractBEList(contractAddress, businessEntityAddress);
         } 
-
         if(targetType == RelationType.FEEFREE) {
-            operatableContractsList[businessEntityAddress].FeeFree.push(contractAddress);
-            contractBusinessEntityList[contractAddress].FeeFree.push(businessEntityAddress);
+            beOperatableContractsList[businessEntityAddress][contractType].FeeFree.push(contractAddress);
+            contractBusinessEntityList[contractAddress][userTypeInfo[businessEntityAddress]].FeeFree.push(businessEntityAddress);
         } else if(targetType == RelationType.FEESELFPAY) {
-            operatableContractsList[businessEntityAddress].FeeSelfPay.push(contractAddress);
-            contractBusinessEntityList[contractAddress].FeeSelfPay.push(businessEntityAddress);
+            beOperatableContractsList[businessEntityAddress][contractType].FeeSelfPay.push(contractAddress);
+            contractBusinessEntityList[contractAddress][userTypeInfo[businessEntityAddress]].FeeSelfPay.push(businessEntityAddress);
         }
-
         contractBusinessEntityRelationInfo[contractAddress][businessEntityAddress] = targetType;
         
-        emit ContractBusinessEntityChanged(contractAddress, businessEntityAddress, targetType, previousRelationType);
+        emit ContractBusinessEntityChanged(contractAddress, businessEntityAddress, previousRelationType, targetType);
     }
+
+    function getAllOperatableContractAddress(
+        address targetAddress, 
+        ContractType targetType
+    ) external view returns (address[] memory, address[] memory, address[] memory, address[] memory, address[] memory, address[] memory){
+        address groupAddressFromStore = storeToGroup[targetAddress];
+        return (
+            creationList[targetAddress][targetType],
+            creationList[groupAddressFromStore][targetType],
+            beOperatableContractsList[targetAddress][targetType].FeeFree,
+            beOperatableContractsList[targetAddress][targetType].FeeSelfPay,
+            beOperatableContractsList[groupAddressFromStore][targetType].FeeFree,
+            beOperatableContractsList[groupAddressFromStore][targetType].FeeSelfPay
+        );
+    }
+
 }

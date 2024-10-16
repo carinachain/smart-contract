@@ -16,41 +16,14 @@ contract Router {
     PointFactory private pointFactory;
     UserManager private userManager;
 
-    event ContractCreated(ContractType indexed contractType, address indexed newCreationAddress, address indexed creatorAddress);
-    event ContractCreatorChanged(ContractType indexed contractType, address indexed creationAddress, address newCreator, address indexed previousCreator); 
+    event ContractCreated(ContractType indexed contractType, address indexed newCreationAddress, address indexed creatorAddress); 
 
     modifier onlyRouterAdmin() {
-        require(adminControler.checkAdmin(msg.sender, ContractType.ROUTER), "Need admin");
-        _;
-    }
-
-    modifier onlyAuthroizedUser(address contractAddress, address senderAddress) {
-        bool result;
-        address contractCreator = IGenericContract(contractAddress).creator();
-        address senderStoreAddress = userManager.getStoreFromClerk(senderAddress);
-        address senderStoreGroupAddress = userManager.getGroupFromStore(senderStoreAddress);
-        address senderGroupAddress = userManager.getGroupFromStore(senderAddress);
-
-        result = (
-            contractCreator == senderStoreAddress || 
-            contractCreator == senderStoreGroupAddress ||
-            contractCreator == senderGroupAddress ||
-            contractCreator == senderAddress || 
-            uint8(userManager.getContractBERelation(contractAddress, senderStoreAddress)) > 1 ||
-            uint8(userManager.getContractBERelation(contractAddress, senderStoreGroupAddress)) > 1 ||
-            uint8(userManager.getContractBERelation(contractAddress, senderAddress)) > 1 ||
-            uint8(userManager.getContractBERelation(contractAddress, senderGroupAddress)) > 1
-        );
-        require(result, "No authorization");
-        _;
-    }
-
-    modifier notOverLimit(address userAddress, ContractType targetType) {
-        require(userManager.getCreationAddressList(userAddress, targetType).length < adminControler.getCreationLimit(targetType), "Reached creation limit");
+        require(adminControler.checkAdmin(msg.sender, ContractType.ROUTER), "Need RouterAdmin");
         _;
     }
     
-    // owner is server    
+
     constructor (address adminControlerAddress) {
         require(adminControlerAddress != address(0), "Invalid address");
         adminControler = AdminControler(adminControlerAddress);
@@ -58,34 +31,34 @@ contract Router {
         userManager = UserManager(adminControler.getContractAddress(ContractType.USERMANAGER));
     }
 
-    // pay credit to contract owner as fee
-    function _payFee(address payerAddress, uint256 feeAmount) internal {
-        require(uint8(userManager.getUserType(payerAddress)) > 1, "Only for registered user");
-        pointFactory.transferPoint(adminControler.getContractAddress(ContractType.CREDITPOINT), payerAddress, address(this), feeAmount);
+
+    // pay credit to contract as fee
+    function _payFee(
+        address payerAddress, 
+        string memory functionName
+    ) internal returns (uint256){
+        uint256 feeAmount = adminControler.getFunctionExpense(address(this), functionName);
+        address creditContractAddress = adminControler.getContractAddress(ContractType.CREDITPOINT);
+        if(feeAmount > 0) {
+            pointFactory.transferPoint(creditContractAddress, payerAddress, address(this), feeAmount);
+        }
+        return feeAmount;
     }
 
-    // contract owner, Group or sender pay fee
-    function _payUsingFee(address contractAddress, address senderAddress, uint256 feeAmount) internal {
+    function _getFeePayer(
+        address contractAddress, 
+        address senderAddress
+    ) internal view returns (address) {
         address payerAddress = senderAddress;
         address contractCreator = IGenericContract(contractAddress).creator();
-        address senderStoreAddress = userManager.getStoreFromClerk(senderAddress);
-        address senderStoreGroupAddress = userManager.getGroupFromStore(senderStoreAddress);
         address senderGroupAddress = userManager.getGroupFromStore(senderAddress);
 
         if(
-            userManager.getStoreGroupRelation(senderStoreAddress, contractCreator) == RelationType.FEEFREE ||
-            userManager.getContractBERelation(contractAddress, senderStoreAddress) == RelationType.FEEFREE ||
-            userManager.getContractBERelation(contractAddress, senderStoreGroupAddress) == RelationType.FEEFREE ||
             userManager.getStoreGroupRelation(senderAddress, contractCreator) == RelationType.FEEFREE ||
             userManager.getContractBERelation(contractAddress, senderGroupAddress) == RelationType.FEEFREE ||
             userManager.getContractBERelation(contractAddress, senderAddress) == RelationType.FEEFREE
         ){
             payerAddress = contractCreator;
-        } else if(
-            userManager.getContractBERelation(contractAddress, senderStoreGroupAddress) == RelationType.FEESELFPAY &&
-            userManager.getStoreGroupRelation(senderStoreAddress, senderStoreGroupAddress) == RelationType.FEEFREE
-        ){
-            payerAddress = senderStoreGroupAddress;
         } else if(
             userManager.getContractBERelation(contractAddress, senderGroupAddress) == RelationType.FEESELFPAY &&
             userManager.getStoreGroupRelation(senderAddress, senderGroupAddress) == RelationType.FEEFREE
@@ -93,16 +66,69 @@ contract Router {
             payerAddress = senderGroupAddress;
         }
 
-        _payFee(payerAddress, feeAmount);
+        return payerAddress;
     }
 
-    function _paySettingFee(address senderAddress, uint256 feeAmount) internal {
-        address payerAddress = senderAddress;
-        address senderGroupAddress = userManager.getGroupFromStore(senderAddress);
-        if(userManager.getStoreGroupRelation(senderAddress, senderGroupAddress) == RelationType.FEEFREE){
-            payerAddress = senderGroupAddress;
+    function getFeePayer(
+        address contractAddress, 
+        address senderAddress
+    ) external view returns (address) {
+        require(_isOriginalContract(contractAddress), "contractAddress is not carina original contract");
+        return _getFeePayer(contractAddress, senderAddress);
+    }
+
+    function _isInsufficientCredit(
+        address targetAddress, 
+        string memory functionName
+    ) internal view returns (bool) {
+        return adminControler.isInsufficientCredit(targetAddress, address(this), functionName);
+    }
+
+    function _isOriginalContract(address targetAddress) internal view returns (bool) {
+        uint256 size;
+        assembly { size := extcodesize(targetAddress) }
+        if (size == 0) {
+            return false;
         }
-        _payFee(payerAddress, feeAmount);
+        try IGenericContract(targetAddress).thisContractType() returns (ContractType) {
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    function _isContractPermittedSender(
+        address contractAddress, 
+        address senderAddress
+    ) internal view returns(bool) {
+        address contractCreator = IGenericContract(contractAddress).creator();
+        address senderGroupAddress = userManager.getGroupFromStore(senderAddress);
+
+        return (
+            contractCreator == senderGroupAddress ||
+            contractCreator == senderAddress || 
+            uint8(userManager.getContractBERelation(contractAddress, senderAddress)) > 1 ||
+            uint8(userManager.getContractBERelation(contractAddress, senderGroupAddress)) > 1
+        );
+    }
+
+    function checkCreateInFactory(
+        address creatorAddress,
+        ContractType targetType
+    ) public view returns(bool, string memory){
+        if(uint8(userManager.getUserType(creatorAddress)) <= 2){
+            return(false, "creatorAddress UserType do not have permission");
+        }
+        if(targetType != ContractType.POINT){
+            return(false, "ContractType not support");
+        }
+        if(userManager.getCreationAddressList(creatorAddress, targetType).length >= adminControler.getCreationLimit(targetType)){
+            return(false, "Reached creation limit");
+        }
+        if(_isInsufficientCredit(creatorAddress, "createInFactory")){
+            return(false, "creatorAddress insufficient credit");
+        }
+        return (true, "");
     }
 
     // creation
@@ -111,22 +137,43 @@ contract Router {
         ContractType targetType, 
         string calldata name, 
         string calldata symbol, 
-        uint8 decimals,
-        // TokenValue calldata tokenValue,
-        uint256 feeAmount
-    ) external onlyRouterAdmin notOverLimit(creatorAddress, targetType) {
-        _payFee(creatorAddress, feeAmount);
-        address newCreationAddress;
+        uint8 decimals
+    ) external onlyRouterAdmin returns(uint256){
+        (bool result, string memory errorMessage) = checkCreateInFactory(creatorAddress, targetType);
+        require(result, errorMessage);
 
-        if(targetType == ContractType.POINT){
-            require(userManager.getUserType(creatorAddress) == UserType.STORE || userManager.getUserType(creatorAddress) == UserType.GROUP, "Creator must be Group/Store");
-            newCreationAddress = pointFactory.createPoint(creatorAddress, targetType, name, symbol, decimals);
-        } else {
-            revert("Unavailable type");
-        }
-
+        address newCreationAddress = pointFactory.createPoint(creatorAddress, targetType, name, symbol, decimals);
         userManager.addToCreationList(newCreationAddress);
         emit ContractCreated(targetType, newCreationAddress, creatorAddress);
+        return _payFee(creatorAddress, "createInFactory");
+    }
+
+
+    function checkDistribution(
+        address contractAddress, 
+        address senderAddress, 
+        uint256 amount
+    ) public view returns(bool, string memory) {
+        if(!_isOriginalContract(contractAddress)){
+            return(false, "contractAddress is not carina original contract");
+        } else {
+            if(
+                IGenericContract(contractAddress).thisContractType() != ContractType.POINT &&
+                IGenericContract(contractAddress).thisContractType() != ContractType.CREDITPOINT
+            ){
+                return(false, "ContractType not support");
+            }
+            if(!_isContractPermittedSender(contractAddress, senderAddress)){
+                return(false, "senderAddress has no permission");
+            }
+            if(amount > pointFactory.getDistributeLimit(contractAddress)){
+                return(false, "amount over the distribution limit");
+            }
+            if(_isInsufficientCredit(_getFeePayer(contractAddress, senderAddress), "distribution")){
+                return(false, "Fee payerAddress insufficient credit");
+            }
+        }
+        return (true, "");
     }
 
     // distribute
@@ -134,16 +181,38 @@ contract Router {
         address contractAddress, 
         address senderAddress, 
         address userAddress, 
-        uint256 amount,
-        uint256 feeAmount
-    ) external onlyRouterAdmin onlyAuthroizedUser(contractAddress, senderAddress) { 
-        _payUsingFee(contractAddress, senderAddress, feeAmount);
+        uint256 amount
+    ) external onlyRouterAdmin returns(uint256){
+        (bool result, string memory errorMessage) = checkDistribution(contractAddress, senderAddress, amount);
+        require(result, errorMessage);
 
-        if(IGenericContract(contractAddress).owner() == adminControler.getContractAddress(ContractType.POINTFACTORY)){
-            pointFactory.distributePoint(contractAddress, senderAddress, userAddress, amount);
+        pointFactory.distributePoint(contractAddress, senderAddress, userAddress, amount);
+        return _payFee(_getFeePayer(contractAddress, senderAddress), "distribution");
+    }
+
+    function checkDeduction(
+        address contractAddress, 
+        address senderAddress,
+        address userAddress,
+        uint256 amount
+    ) public view returns(bool, string memory) {
+        if(!_isOriginalContract(contractAddress)){
+            return(false, "contractAddress is not carina original contract");
         } else {
-            revert("Contract type not support");
+            if(IGenericContract(contractAddress).thisContractType() != ContractType.POINT){
+                return(false, "ContractType not support");
+            }
+            if(!_isContractPermittedSender(contractAddress, senderAddress)){
+                return(false, "senderAddress has no permission");
+            }
+            if(amount > IGenericContract(contractAddress).balanceOf(userAddress)){
+                return(false, "Insufficient balance");
+            }
+            if(_isInsufficientCredit(_getFeePayer(contractAddress, senderAddress), "deduction")){
+                return(false, "Fee payerAddress insufficient credit");
+            }
         }
+        return (true, "");
     }
 
     // sender take creation from user
@@ -151,16 +220,44 @@ contract Router {
         address contractAddress, 
         address senderAddress, 
         address userAddress, 
-        uint256 amount,
-        uint256 feeAmount
-    ) external onlyRouterAdmin onlyAuthroizedUser(contractAddress, senderAddress) {
-        _payUsingFee(contractAddress, senderAddress, feeAmount);
+        uint256 amount
+    ) external onlyRouterAdmin returns(uint256){
+        (bool result, string memory errorMessage) = checkDeduction(contractAddress, senderAddress, userAddress, amount);
+        require(result, errorMessage);
+        
+        pointFactory.deductPoint(contractAddress, senderAddress, userAddress, amount);
+        return _payFee(_getFeePayer(contractAddress, senderAddress), "deduction");
+    }
 
-        if(IGenericContract(contractAddress).owner() == adminControler.getContractAddress(ContractType.POINTFACTORY)){
-            pointFactory.deductPoint(contractAddress, senderAddress, userAddress, amount);
+    function checkContractTransfer(
+        address contractAddress, 
+        address fromAddress, 
+        address toAddress, 
+        uint256 amount
+    ) public view returns(bool, string memory) {
+        if(!_isOriginalContract(contractAddress)){
+            return(false, "contractAddress is not carina original contract");
         } else {
-            revert("Contract type not support");
+            if(
+                IGenericContract(contractAddress).thisContractType() != ContractType.POINT &&
+                IGenericContract(contractAddress).thisContractType() != ContractType.CREDITPOINT
+            ){
+                return(false, "ContractType not support");
+            }
+            if(uint8(userManager.getUserType(fromAddress)) <= 1){
+                return(false, "fromAddress is not registered");
+            }
+            if(amount > IGenericContract(contractAddress).balanceOf(fromAddress)){
+                return(false, "fromAddress Insufficient balance");
+            }
+            if(uint8(userManager.getUserType(toAddress)) <= 1){
+                return(false, "toAddress is not registered");
+            }
+            if(_isInsufficientCredit(fromAddress, "contractTransfer")){
+                return(false, "fromAddress insufficient credit");
+            }
         }
+        return (true, "");
     }
 
     // creation transfer, from address pay fee
@@ -168,104 +265,178 @@ contract Router {
         address contractAddress, 
         address fromAddress, 
         address toAddress, 
-        uint256 amount,
-        uint256 feeAmount
-    ) external onlyRouterAdmin {
-        _payFee(fromAddress, feeAmount);
+        uint256 amount
+    ) external onlyRouterAdmin returns(uint256){
+        (bool result, string memory errorMessage) = checkContractTransfer(contractAddress, fromAddress, toAddress, amount);
+        require(result, errorMessage);
 
-        if(IGenericContract(contractAddress).owner() == adminControler.getContractAddress(ContractType.POINTFACTORY)){
-            pointFactory.transferPoint(contractAddress, fromAddress, toAddress, amount);
+        pointFactory.transferPoint(contractAddress, fromAddress, toAddress, amount);
+        return _payFee(fromAddress, "contractTransfer");
+    }
+
+    function checkChangeContractDistributeLimit(
+        address contractAddress, 
+        address senderAddress, 
+        uint256 newValue
+    ) public view returns(bool, string memory) {
+        if(!_isOriginalContract(contractAddress)){
+            return(false, "contractAddress is not carina original contract");
         } else {
-            revert("Contract type not support");
+            if(senderAddress != IGenericContract(contractAddress).creator()){
+                return(false, "senderAddress is not contract creator");
+            }
+            if(newValue == pointFactory.getDistributeLimit(contractAddress)){
+                return(false, "newValue is same as now");
+            }
+            if(_isInsufficientCredit(senderAddress, "changeContractDistributeLimit")){
+                return(false, "senderAddress insufficient credit");
+            }
         }
+        return (true, "");
     }
 
     // change contract distribute limit
     function changeContractDistributeLimit(
         address contractAddress, 
         address senderAddress, 
-        uint256 newValue,
-        uint256 feeAmount
-    ) external onlyRouterAdmin {
-        _payFee(senderAddress, feeAmount);
+        uint256 newValue
+    ) external onlyRouterAdmin returns(uint256){
+        (bool result, string memory errorMessage) = checkChangeContractDistributeLimit(contractAddress, senderAddress, newValue);
+        require(result, errorMessage);
 
-        if(IGenericContract(contractAddress).owner() == adminControler.getContractAddress(ContractType.POINTFACTORY)){
-            pointFactory.changePointDistributeLimit(contractAddress, senderAddress, newValue);
+        pointFactory.changePointDistributeLimit(contractAddress, newValue);
+        return _payFee(senderAddress, "changeContractDistributeLimit");
+    }
+
+    function checkChangeContractCreator(
+        address contractAddress,
+        address senderAddress,
+        address newCreator
+    ) public view returns(bool, string memory) {
+        ContractType contractType = IGenericContract(contractAddress).thisContractType();
+
+        if(!_isOriginalContract(contractAddress)){
+            return(false, "contractAddress is not carina original contract");
         } else {
-            revert("Contract type not support");
+            if(contractType != ContractType.POINT){
+                return(false, "ContractType not support");
+            }
+            if(senderAddress != IGenericContract(contractAddress).creator()){
+                return(false, "senderAddress is not contract creator");
+            }
+            if(uint8(userManager.getUserType(newCreator)) <= 2){
+                return(false, "newCreator UserType do not have permission");
+            }
+            if(userManager.getCreationAddressList(newCreator, contractType).length >= adminControler.getCreationLimit(contractType)){
+                return(false, "newCreator Reached creation limit");
+            }
+            if(_isInsufficientCredit(senderAddress, "changeContractCreator")){
+                return(false, "senderAddress insufficient credit");
+            }
         }
+        return (true, "");
     }
 
     // change creation creator， not over the creation limit
     function changeContractCreator(
         address contractAddress,
         address senderAddress,
-        address newCreator,
-        uint256 feeAmount
-    ) external onlyRouterAdmin notOverLimit(newCreator, IGenericContract(contractAddress).thisContractType()) {
-        ContractType creationType = IGenericContract(contractAddress).thisContractType();
-        address previousCreator = IGenericContract(contractAddress).creator();
+        address newCreator
+    ) external onlyRouterAdmin returns(uint256){
+        (bool result, string memory errorMessage) = checkChangeContractCreator(contractAddress, senderAddress, newCreator);
+        require(result, errorMessage);
+
         userManager.removeFromCreationList(contractAddress);
-
-        _payFee(senderAddress, feeAmount);
-
-        if(IGenericContract(contractAddress).owner() == adminControler.getContractAddress(ContractType.POINTFACTORY)){
-            require(userManager.getUserType(newCreator) == UserType.STORE  || userManager.getUserType(newCreator) == UserType.GROUP, "Creator must be Group/Store");
-            pointFactory.changePointCreator(senderAddress, contractAddress, newCreator);
-        } else {
-            revert("Contract type not support");
-        }
-        
+        pointFactory.changePointCreator(senderAddress, contractAddress, newCreator);
         userManager.addToCreationList(contractAddress);
-        emit ContractCreatorChanged(creationType, contractAddress, newCreator, previousCreator);
+        return _payFee(senderAddress, "changeContractCreator");
+    }
+
+    function checkChangeContractPausedStatus(
+        address contractAddress, 
+        address senderAddress, 
+        bool newValue
+    ) public view returns(bool, string memory) {
+        if(!_isOriginalContract(contractAddress)){
+            return(false, "contractAddress is not carina original contract");
+        } else {
+            if(IGenericContract(contractAddress).thisContractType() != ContractType.POINT){
+                return(false, "ContractType not support");
+            }
+            if(senderAddress != IGenericContract(contractAddress).creator()){
+                return(false, "senderAddress is not contract creator");
+            }
+            if(newValue == IGenericContract(contractAddress).paused()){
+                return(false, "newValue is same as now");
+            }
+            if(_isInsufficientCredit(senderAddress, "changeContractPausedStatus")){
+                return(false, "senderAddress insufficient credit");
+            }
+        }
+        return (true, "");
+    }
+
+    // change contract Paused status
+    function changeContractPausedStatus(
+        address contractAddress, 
+        address senderAddress, 
+        bool newValue
+    ) external onlyRouterAdmin returns(uint256){
+        (bool result, string memory errorMessage) = checkChangeContractPausedStatus(contractAddress, senderAddress, newValue);
+        require(result, errorMessage);
+
+        pointFactory.setPointPauseStatus(contractAddress, senderAddress, newValue);
+        return _payFee(senderAddress, "changeContractPausedStatus");
+    }
+
+    function checkManageUserRegistration(
+        address userAddress,
+        UserType userType
+    ) public view returns(bool, string memory) {
+        return userManager.checkManageUserType(userAddress, userType);
     }
 
     function manageUserRegistration(
         address userAddress,
-        UserType userType,
-        uint256 feeAmount
+        UserType userType
     ) external onlyRouterAdmin {
-        pointFactory.transferPoint(adminControler.getContractAddress(ContractType.CREDITPOINT), userAddress, address(this), feeAmount);
-        userManager.manageUser(userAddress, userType);
+        userManager.manageUserType(userAddress, userType);
+    }
+
+    function checkManageGroupStore(
+        address groupAddress, 
+        address storeAddress, 
+        RelationType relationType
+    ) public view returns(bool, string memory) {
+        return userManager.checkManageGroupStore(groupAddress, storeAddress, relationType);
     }
 
     function manageGroupStore(
         address groupAddress, 
         address storeAddress,
-        RelationType relationType,
-        uint256 feeAmount
-    ) external onlyRouterAdmin {
-        _payFee(groupAddress, feeAmount);
-        userManager.manageGroupStoreRelation(groupAddress, storeAddress, relationType);
+        RelationType relationType
+    ) external onlyRouterAdmin returns(uint256){
+        userManager.manageGroupStore(groupAddress, storeAddress, relationType);
+        return _payFee(groupAddress, "manageGroupStore");
+    }
+
+    function checkManageContractBE(
+        address senderAddress,
+        address contractAddress,
+        address businessEntityAddress,
+        RelationType targetType
+    ) public view returns(bool, string memory)  {
+        return userManager.checkManageContractBE(senderAddress, contractAddress, businessEntityAddress, targetType);
     }
 
     function manageContractBE(
         address senderAddress,
         address contractAddress,
         address businessEntityAddress,
-        RelationType targetType,
-        uint256 feeAmount
-    ) external onlyRouterAdmin {
-        _paySettingFee(senderAddress, feeAmount);
+        RelationType targetType
+    ) external onlyRouterAdmin returns(uint256){        
         userManager.manageContractBE(senderAddress, contractAddress, businessEntityAddress, targetType);
-    }
-
-    function addClerkToList(
-        address storeAddress,
-        address clerkAddress,
-        uint256 feeAmount
-    ) external onlyRouterAdmin {
-        _paySettingFee(storeAddress, feeAmount);
-        userManager.addClerk(storeAddress, clerkAddress);
-    }
-
-    function removeClerkFromList(
-        address storeAddress,
-        address removeClerkAddress,
-        uint256 feeAmount
-    ) external onlyRouterAdmin {
-        _paySettingFee(storeAddress, feeAmount);
-        userManager.removeClerk(storeAddress, removeClerkAddress);
+        return _payFee(senderAddress, "manageContractBE");
     }
 
 }

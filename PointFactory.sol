@@ -5,7 +5,6 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "./Point.sol";
 import "./AdminControler.sol";
 import "./ShareEnums.sol";
-import "./IGenericContract.sol";
 
 contract PointFactory is Ownable {
     string public constant COPYRIGHT = "Copyright (c) 2024 CarinaChain.com All rights reserved.";
@@ -14,13 +13,13 @@ contract PointFactory is Ownable {
 
     AdminControler private adminControler;
 
-    event PointCreated( 
-        address indexed creationAddress,
-        address indexed creator
-    );
+    mapping(address => uint256) private distributeLimit;
 
-    modifier onlyPointAdmin() {
-        require(adminControler.checkAdmin(msg.sender, thisContractType), "Need admin");
+    event PointCreated(address indexed pointAddress, address indexed creator);
+    event PointDistributeLimitChanged(address indexed pointAddress, uint256 indexed previousValue, uint256 indexed newValue);
+
+    modifier onlyPointFactoryAdmin() {
+        require(adminControler.checkAdmin(msg.sender, thisContractType), "Need PointFactoryAdmin");
         _;
     }
 
@@ -43,8 +42,8 @@ contract PointFactory is Ownable {
         address newOwner
     ) external onlyOwner {
         address previousOwner = Point(pointAddress).owner();
-        require(newOwner != previousOwner, "Already set");
-        Point(pointAddress).transferOwnership(newOwner); //check newOwner
+        require(newOwner != previousOwner, "newOwner is same as now");
+        Point(pointAddress).transferOwnership(newOwner); 
     }
 
     // create point, point owner is this contract
@@ -54,12 +53,25 @@ contract PointFactory is Ownable {
         string calldata name, 
         string calldata symbol,
         uint8 decimals
-        // uint256 valueAmount,
-        // string calldata valueCurrency
-    ) external onlyPointAdmin returns (address) {
+    ) external onlyPointFactoryAdmin returns (address) {
         Point newPointContract = new Point(creatorAddress, createContractType, name, symbol, decimals);
+        distributeLimit[address(newPointContract)] = 100000 * (10 ** uint256(decimals));
         emit PointCreated(address(newPointContract), creatorAddress);
         return address(newPointContract);
+    }
+
+    function getDistributeLimit(address pointAddress) external view returns(uint256) {
+        return distributeLimit[pointAddress];
+    }
+
+    function changePointDistributeLimit(
+        address pointAddress,
+        uint256 newValue
+    ) external onlyPointFactoryAdmin {
+        uint256 previousValue = distributeLimit[pointAddress];
+        require(newValue != previousValue, "newValue is same as now");
+        distributeLimit[pointAddress] = newValue;
+        emit PointDistributeLimitChanged(pointAddress, previousValue, newValue);
     }
 
     // distribute point with automint
@@ -68,7 +80,8 @@ contract PointFactory is Ownable {
         address fromAddress, 
         address toAddress, 
         uint256 amount
-    ) external onlyPointAdmin {
+    ) external onlyPointFactoryAdmin {
+        require(amount <= distributeLimit[pointAddress], "amount over the distribution limit");
         Point(pointAddress).distribute(fromAddress, toAddress, amount);
     }
 
@@ -78,7 +91,7 @@ contract PointFactory is Ownable {
         address senderAddress,
         address userAddress,  
         uint256 amount
-    ) external onlyPointAdmin {
+    ) external onlyPointFactoryAdmin {
         Point(pointAddress).deduct(senderAddress, userAddress, amount); 
     }
 
@@ -88,26 +101,8 @@ contract PointFactory is Ownable {
         address fromAddress, 
         address toAddress, 
         uint256 amount
-    ) external onlyPointAdmin {
+    ) external onlyPointFactoryAdmin {
         Point(pointAddress).pTransfer(fromAddress, toAddress, amount); 
-    }
-
-    // change point distribute limit
-    function changePointDistributeLimit(
-        address pointAddress,
-        address senderAddress,
-        uint256 newValue
-    ) external onlyPointAdmin {
-        Point(pointAddress).changeDistributeLimit(senderAddress, newValue); 
-    }
-
-    // point transfer switch, switchon: only transfer request from point fanctory is acceptable
-    function setPointMintSwitch(
-        address pointAddress, 
-        address senderAddress,
-        bool newValue
-    ) external onlyPointAdmin {
-        Point(pointAddress).setMintSwitch(senderAddress, newValue); 
     }
 
     // change point creator 
@@ -115,8 +110,17 @@ contract PointFactory is Ownable {
         address pointAddress, 
         address senderAddress,
         address newCreator
-    ) external onlyPointAdmin {
+    ) external onlyPointFactoryAdmin {
         Point(pointAddress).changeCreator(senderAddress, newCreator);
+    }
+
+    // point paused status, default is false
+    function setPointPauseStatus(
+        address pointAddress, 
+        address senderAddress,
+        bool newValue
+    ) external onlyPointFactoryAdmin {
+        Point(pointAddress).changePauseStatus(senderAddress, newValue); 
     }
 
 }

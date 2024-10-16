@@ -20,14 +20,8 @@ interface IGenericContract is IERC20Metadata {
 
     // Transfer switch status
     function transferSwitchStatus() external view returns (bool);
-    
-    // Auto mint status
-    function distributeLimitInfo() external view returns (uint256);
 
-    // Mint switch status
-    function mintSwitchStatus() external view returns (bool);
-
-    // tokenValue
-    // function thisTokenValue() external view returns (TokenValue memory);
+    // Get Address lastest Balance and update TimeStamp
+    function getAddressBalanceTimeStamp(address targetAddress) external view returns (uint256, uint256);
 
 }
