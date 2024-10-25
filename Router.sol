@@ -347,7 +347,7 @@ contract Router {
         require(result, errorMessage);
 
         userManager.removeFromCreationList(contractAddress);
-        pointFactory.changePointCreator(senderAddress, contractAddress, newCreator);
+        pointFactory.changePointCreator(contractAddress, senderAddress, newCreator);
         userManager.addToCreationList(contractAddress);
         return _payFee(senderAddress, "changeContractCreator");
     }
