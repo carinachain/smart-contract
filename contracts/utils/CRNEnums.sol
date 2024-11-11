@@ -1,0 +1,64 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+enum UserType {
+    UNREGISTERED,
+    DELETED,
+    GENERAL,
+    GROUP,
+    STORE,
+    SERVICEPROVIDER,
+    ADMINISTRATOR,
+    OTHERS
+}
+
+enum RelationType {
+    UNDEFINED,
+    CLEARED,
+    FEEFREE,
+    FEESELFPAY
+}
+
+enum ContractType {
+    UNDEFINED,
+    CRNTOKEN,
+    ADMINCONTROL,
+    MEMBERSHIP,
+    POINT,
+    COUPON,
+    STAMP,
+    SWAPPOOL,
+    TRADE,
+    MEMBERSHIPFACTORY,
+    POINTFACTORY,
+    COUPONFACTORY,
+    STAMPFACTORY,
+    SWAPPOOLFACTORY,
+    TRADEFACTORY,
+    USERMANAGER_A,
+    USERMANAGER_B,
+    USERMANAGER_C,
+    ROUTER_A,
+    ROUTER_B,
+    ROUTER_C,
+    ROUTER_D,
+    CREDIT,
+    WRAPPEDCRN,
+    WCRNCONVERTER,
+    SLOT_ONE_A,
+    SLOT_ONE_B,
+    SLOT_TWO_A,
+    SLOT_TWO_B,
+    SLOT_THREE_A,
+    SLOT_THREE_B,
+    SLOT_FOUR_A,
+    SLOT_FOUR_B,
+    SLOT_FIVE_A,
+    SLOT_FIVE_B,
+    SLOT_SIX_A,
+    SLOT_SIX_B,
+    SLOT_SEVEN_A,
+    SLOT_SEVEN_B,
+    SLOT_EIGHT_A,
+    SLOT_EIGHT_B
+}
