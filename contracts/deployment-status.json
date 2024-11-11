@@ -1,0 +1,40 @@
+{
+  "deployCRN": {
+    "status": {
+      "adminControl": true,
+      "userManagerA": true,
+      "pointFactory": true,
+      "membershipFactory": true,
+      "credit": true,
+      "routerA": true,
+      "routerB": true
+    },
+    "addresses": {
+      "adminControl": {
+        "logic": "0x59624aB4a44c94827C2575C0d8f822471583b880",
+        "proxy": "0x9BB46Ff12526E8D2c2A6eF61aDAA1d2BCD8462b2"
+      },
+      "userManagerA": {
+        "logic": "0x57CcA91301B45112c9B8Da605c05B7DB64Df7569",
+        "proxy": "0x156e00911B224CFe6F08AF776E015E1Be40eDd50"
+      },
+      "pointFactory": {
+        "logic": "0xab64BB6fc58d8552EaFEcf6BEdfED550e02F6336",
+        "proxy": "0x7DF0129Bc6E6FDBB32c141Caa021789CeA0921bc"
+      },
+      "membershipFactory": {
+        "logic": "0xE0E869Bb63b2d5F15d5E78cDd31AD757a26fC984",
+        "proxy": "0x6832Cc99a6D42D5B7Aa4a7AB5338A39aEA629BbC"
+      },
+      "credit": "0x83f41664B25dB59349350514c2E61B0776281cb8",
+      "routerA": {
+        "logic": "0xD25726b6C92858B730021E661159d33379493fa2",
+        "proxy": "0x247f875591684Ab74EC10D2fF89dce99d7d969A6"
+      },
+      "routerB": {
+        "logic": "0xFEF070A235a0DDff5D101A923F0d1832C80F9C4f",
+        "proxy": "0xAfF5B47A43E46FA091a78643406961B6156464E2"
+      }
+    }
+  }
+}
